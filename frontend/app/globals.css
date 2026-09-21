@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+:root {
+  --paper: #f1f3f1;
+  --surface: #ffffff;
+  --ink: #14181f;
+  --ink-soft: #4b5563;
+  --line: #d8ddd9;
+  --risk: #b0402a;
+  --risk-soft: #f3e2dc;
+  --retain: #29694f;
+  --retain-soft: #dfeee7;
+  --value: #9c7a22;
+  --value-soft: #f2e9d3;
+  --accent: #1d3557;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-line: var(--line);
+  --color-risk: var(--risk);
+  --color-risk-soft: var(--risk-soft);
+  --color-retain: var(--retain);
+  --color-retain-soft: var(--retain-soft);
+  --color-value: var(--value);
+  --color-value-soft: var(--value-soft);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-space-grotesk);
+  --font-mono: var(--font-plex-mono);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+.tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes risk-reveal {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.risk-reveal {
+  display: inline-block;
+  animation: risk-reveal 450ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
