@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cip}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      POSTGRES_DB: ${POSTGRES_DB:-customer_intelligence}
+    ports:
+      - "5439:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cip}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Optional: `docker compose up api` runs the FastAPI backend itself in a
+  # container against the `postgres` service above. Still requires
+  # `python scripts/build_backend_data.py` to have been run at least once
+  # on the host first (models/ is bind-mounted in, not baked into the
+  # image -- see Dockerfile). Not started by a bare `docker compose up`,
+  # since most local dev only needs the database.
+  api:
+    build: .
+    profiles: ["api"]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cip}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-customer_intelligence}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:3000}
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./models:/app/models:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
