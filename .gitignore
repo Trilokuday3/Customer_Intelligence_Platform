@@ -1,0 +1,41 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# env / secrets
+.env
+.env.*
+!.env.example
+
+# data (regenerate via scripts/generate_data.py, keep only the small sample committed)
+data/raw/
+data/processed/
+!data/samples/.gitkeep
+!data/samples/*.csv
+
+# notebooks checkpoints
+.ipynb_checkpoints/
+
+# mlflow / model artifacts
+mlruns/
+mlartifacts/
+models/
+
+# local API database (default sqlite fallback when DATABASE_URL isn't set)
+*.db
+
+# frontend
+frontend/node_modules/
+frontend/.next/
+
+# OS
+.DS_Store
+Thumbs.db
