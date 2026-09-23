@@ -80,6 +80,20 @@ definitively better; on this dataset they're effectively tied, both
 clearly ahead of logistic regression, and all three are far ahead of
 baseline (PR-AUC 0.71–0.74 vs 0.29).
 
+### Why the dashboard shows 0.741, not 0.735
+
+The tables above follow the select-then-test protocol: models are trained
+on the 4 earlier snapshots (19,974 rows) and the validation snapshot is
+only used to pick the champion. The **deployed** model
+(`scripts/build_backend_data.py`) is refit on all 5 snapshots, validation
+included (25,482 rows), the usual step once model selection is done. On the
+same untouched 2025-12-31 test set that refit scores PR-AUC **0.741**, lift@10%
+**3.07** (ROC-AUC 0.863, Brier 0.156), and that is what the dashboard's Model
+Center shows. Verified by running both trainings on the seed-42 data: 4
+snapshots gives 0.735 / 3.01, 5 snapshots gives 0.741 / 3.07. The headline
+figures quoted elsewhere (README, resume bullets) are the 0.735 / 3.0x
+protocol numbers, the more conservative of the two.
+
 ## Calibration (XGBoost, test set)
 
 | predicted (mean) | observed rate |
