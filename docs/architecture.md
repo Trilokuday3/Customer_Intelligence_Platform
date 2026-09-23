@@ -39,7 +39,10 @@ customer-intelligence/
 │   ├── explainability/      # global/local SHAP (Phase 8)
 │   ├── analytics/            # cohorts, retention, scenario simulator (Phase 3/16/17)
 │   ├── api/                    # FastAPI routers (Phase 9)
-│   └── monitoring/               # data/feature/prediction drift (Phase 11)
+│   ├── monitoring/               # data/feature/prediction drift (Phase 11)
+│   └── streaming/                  # rate estimation + event sampling for the optional Kafka/Spark stream (see docs/streaming.md)
+├── spark/                # stream_ingest_job.py + upsert_sql.py + Dockerfile: Kafka -> Postgres upserts (optional)
+├── scripts/stream_producer.py  # host-run Kafka producer for the streaming layer (optional)
 ├── notebooks/            # 01_data_quality ... 09_scenarios
 ├── tests/{unit,integration,e2e}
 ├── frontend/             # Next.js dashboard (Phase 10)

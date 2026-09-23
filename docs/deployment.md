@@ -17,6 +17,13 @@ python scripts/build_backend_data.py    # trains models, writes ./models (bind-m
 docker compose --profile api restart api   # pick up the freshly written models/
 ```
 
+**Seeding is one-time.** `build_backend_data.py` seeds the raw tables from
+parquet only when `customers` is empty; re-running `generate_data.py` (new
+seed) and then the script does not reload the DB. To re-seed from fresh
+parquet files, empty the DB first: for local SQLite delete `cip.db`; for
+Postgres run `docker compose down -v` (a FULL wipe of Postgres data), then
+`docker compose up -d postgres`, then re-run the script.
+
 The API container reads `DATABASE_URL` pointed at the `postgres`
 service (set in `docker-compose.yml`) and mounts `./models` read-only —
 retraining on the host and restarting the container is the whole

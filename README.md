@@ -81,6 +81,12 @@ the generator. For the full backend + dashboard (Phases 9-11), see
 `docs/api_reference.md` and `frontend/README.md`; for running it in
 Docker instead of directly on the host, see `docs/deployment.md`.
 
+## Continuous data (optional)
+
+New orders, interactions, and support tickets can stream in continuously
+through Kafka and a Spark cluster into Postgres. See
+[docs/streaming.md](docs/streaming.md).
+
 ## Documentation
 
 | Doc | Covers |
