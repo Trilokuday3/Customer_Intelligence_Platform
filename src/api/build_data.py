@@ -11,9 +11,11 @@ than only showing up against the full dataset.
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from datetime import date, datetime
 
 import pandas as pd
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from api import models as db_models
@@ -58,6 +60,44 @@ def load_raw_tables(
     db.bulk_insert_mappings(db_models.Interaction, interactions.to_dict(orient="records"))
     db.bulk_insert_mappings(db_models.SupportTicket, support.to_dict(orient="records"))
     db.commit()
+
+
+def raw_tables_seeded(db: Session) -> bool:
+    """True once `customers` has any row. build_backend_data.py uses this to
+    seed from parquet exactly once instead of wiping rows Kafka/Spark streamed in."""
+    return db.query(db_models.Customer).first() is not None
+
+
+def seed_raw_tables_if_empty(
+    db: Session,
+    load_frames: Callable[[], tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]],
+) -> bool:
+    """Seed the raw tables from `load_frames()` only when they are empty.
+    Returns False (without calling `load_frames`) if already seeded, so rows
+    streamed in by Kafka/Spark are never wiped by a re-run."""
+    if raw_tables_seeded(db):
+        return False
+    customers, products, orders, interactions, support = load_frames()
+    load_raw_tables(db, customers, products, orders, interactions, support)
+    return True
+
+
+def read_raw_tables(db: Session) -> dict[str, pd.DataFrame]:
+    """Current contents of the raw tables (seed history plus anything streamed
+    in since) as the DataFrames the feature pipeline expects."""
+    bind = db.get_bind()
+    tables = {
+        "customers": pd.read_sql(select(db_models.Customer).order_by(db_models.Customer.customer_id), bind),
+        "products": pd.read_sql(select(db_models.Product).order_by(db_models.Product.product_id), bind),
+        "orders": pd.read_sql(select(db_models.Order).order_by(db_models.Order.order_id), bind),
+        "interactions": pd.read_sql(select(db_models.Interaction).order_by(db_models.Interaction.interaction_id), bind),
+        "support": pd.read_sql(select(db_models.SupportTicket).order_by(db_models.SupportTicket.ticket_id), bind),
+    }
+    tables["customers"]["signup_date"] = pd.to_datetime(tables["customers"]["signup_date"])
+    tables["orders"]["order_date"] = pd.to_datetime(tables["orders"]["order_date"])
+    tables["interactions"]["event_time"] = pd.to_datetime(tables["interactions"]["event_time"])
+    tables["support"]["created_at"] = pd.to_datetime(tables["support"]["created_at"])
+    return tables
 
 
 def store_predictions(

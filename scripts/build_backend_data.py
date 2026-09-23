@@ -1,7 +1,7 @@
-"""One-shot batch job: load raw data, train/persist the champion churn
-and CLV models, and compute predictions/segments/explanations into the
-API's database. Mirrors what a real Phase 11 scheduled retraining job
-would do; run manually for now.
+"""One-shot batch job: seed raw data once, then train/persist the champion
+churn and CLV models, and compute predictions/segments/explanations into
+the API's database from whatever the raw tables currently hold. Mirrors what a real Phase 11
+scheduled retraining job would do; run manually for now.
 
 Usage:
     .venv/Scripts/python.exe scripts/build_backend_data.py
@@ -20,7 +20,8 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
 from api.build_data import (  # noqa: E402
-    load_raw_tables,
+    read_raw_tables,
+    seed_raw_tables_if_empty,
     store_drift_report,
     store_explanations,
     store_model_run,
@@ -107,20 +108,25 @@ CLV_TRAIN_CUTOFFS = ["2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30"]
 
 def main() -> None:
     MODELS_DIR.mkdir(exist_ok=True)
-    raw = ROOT / "data" / "raw"
-    customers = pd.read_parquet(raw / "customers.parquet")
-    products = pd.read_parquet(raw / "products.parquet")
-    orders = pd.read_parquet(raw / "orders.parquet")
-    interactions = pd.read_parquet(raw / "interactions.parquet")
-    support = pd.read_parquet(raw / "support.parquet")
-
     test_cutoff = pd.Timestamp(config.OBSERVATION_CUTOFF)
 
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        print("loading raw tables...")
-        load_raw_tables(db, customers, products, orders, interactions, support)
+        def _read_seed_parquet():
+            raw = ROOT / "data" / "raw"
+            return tuple(
+                pd.read_parquet(raw / f"{name}.parquet")
+                for name in ("customers", "products", "orders", "interactions", "support")
+            )
+
+        if seed_raw_tables_if_empty(db, _read_seed_parquet):
+            print("seeded raw tables from data/raw/*.parquet")
+        else:
+            print("raw tables already seeded -- keeping existing (and any streamed) rows")
+        tables = read_raw_tables(db)
+        customers, products = tables["customers"], tables["products"]
+        orders, interactions, support = tables["orders"], tables["interactions"], tables["support"]
 
         # Captured before store_predictions() overwrites the table -- the only
         # "current vs. last run" baseline available for prediction drift.
