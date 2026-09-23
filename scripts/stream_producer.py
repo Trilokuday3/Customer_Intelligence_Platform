@@ -110,11 +110,13 @@ def main() -> None:
     customers, products = tables["customers"], tables["products"]
     orders, interactions, support = tables["orders"], tables["interactions"], tables["support"]
 
-    sim_clock = stream_start_time(orders, interactions, support)
     # Rates come from the seed history only, so they are identical across restarts
-    # (streamed events must not revive dormant customers). The clock and IDs use
-    # the FULL frames so streaming resumes after everything already stored.
+    # (streamed events must not revive dormant customers). The clock never starts
+    # before history_end, so no streamed event can fall inside the history window
+    # the rates were estimated from; IDs use the FULL frames so streaming resumes
+    # after everything already stored.
     history_end = pd.Timestamp(config.DATA_END) + pd.Timedelta(days=1)
+    sim_clock = max(stream_start_time(orders, interactions, support), history_end)
     h_orders, h_interactions, h_support = restrict_to_history(orders, interactions, support, history_end)
     rates = estimate_customer_rates(customers, h_orders, h_interactions, h_support, as_of=history_end)
     next_ids = merge_next_ids(next_ids_from_frames(orders, interactions, support), _last_kafka_sequences(args.bootstrap))
