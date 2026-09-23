@@ -90,8 +90,10 @@ deletes Postgres data.
   excluded), so they are identical across producer restarts, and a dormant
   customer does not "wake up" by receiving a floor-rate event.
 - **Simulated clock.** History ends 2026-06-30, so wall-clock timestamps
-  would leave a fake gap. The producer's clock starts at the latest
-  timestamp already in Postgres and advances `tick-seconds * speed`
+  would leave a fake gap. The producer's clock starts at the later of the
+  latest timestamp already in Postgres and the end of the seed history
+  (2026-07-01 00:00), so streamed events never fall inside the history the
+  rates were estimated from, and advances `tick-seconds * speed`
   simulated seconds per tick (default 5 s x 3600 = 5 simulated hours per
   tick). Each event gets a random timestamp inside its tick.
 - **IDs resume from max(Postgres, last Kafka message).** `O`/`I`/`T`
@@ -134,9 +136,10 @@ deletes Postgres data.
    restart-loops until the checkpoint is reset. Malformed or incomplete rows
    (any null field) are dropped silently by `.dropna()`, so they never reach
    Postgres and are not logged.
-3. **Simulated clock and scoring.** Streamed events resume from the latest
-   stored timestamp (2026-06-29 23:00 for the seed data), not from
-   2026-06-30. Model scoring still uses the fixed `OBSERVATION_CUTOFF`
+3. **Simulated clock and scoring.** Streamed events start at 2026-07-01
+   00:00 on a first run (the end of the seed history; the latest seed row is
+   2026-06-29 23:00) and resume from the latest stored timestamp after that.
+   Model scoring still uses the fixed `OBSERVATION_CUTOFF`
    (2025-12-31) and the label horizons end before that, so the conclusion is
    unchanged: streamed data does not change features, scores, or drift; row
    counts in Postgres grow but the scores do not (yet).
@@ -144,7 +147,7 @@ deletes Postgres data.
    is on the Spark side), and a broker drop ends the producer loop. Restart
    it; the clock resumes from Postgres and IDs from max(Postgres, last Kafka
    message).
-5. **Prediction drift and re-seeding.** `build_backend_data.py` now keeps the
+5. **Prediction drift.** `build_backend_data.py` now keeps the
    previous predictions as the drift baseline, so prediction-drift rows appear
    from the second run (the old code deleted predictions before capturing the
    baseline).
@@ -160,5 +163,6 @@ deletes Postgres data.
   design decision.
 - No exactly-once delivery; at-least-once plus idempotent upserts is the
   chosen tradeoff.
-- Not automated in CI; the Kafka -> Spark -> Postgres path is verified by
-  hand against the real stack.
+- Not automated in CI; the Kafka -> Spark -> Postgres path is meant to be
+  verified by hand against the real stack (not yet done, see the status note
+  at the top).

@@ -8,8 +8,8 @@ Interactive docs at `/docs` (Swagger UI) once the server is running.
 ```powershell
 docker compose up -d postgres          # local Postgres on port 5439 (see .env.example)
 python scripts/generate_data.py        # if data/raw/ doesn't exist yet
-python scripts/build_backend_data.py   # trains models, loads DB, scores, computes explanations
-$env:DATABASE_URL = "postgresql://cip:changeme@localhost:5439/customer_intelligence"
+$env:DATABASE_URL = "postgresql://cip:changeme@localhost:5439/customer_intelligence"   # set BEFORE the build so it seeds Postgres, not SQLite
+python scripts/build_backend_data.py   # trains models, seeds DB once, scores, computes explanations
 uvicorn api.main:app --app-dir src --reload
 ```
 

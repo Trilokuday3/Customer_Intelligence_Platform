@@ -258,8 +258,9 @@ them. Runbook: `docs/streaming.md`.
   (`restrict_to_history`), so they are identical across producer restarts.
 - Producer IDs resume from max(Postgres, last message on each Kafka topic) so
   restarts are safe while Spark lags. The Kafka read is unverified live.
-- Streamed events resume from the latest stored timestamp (2026-06-29 23:00
-  for the seed data). Scoring stays at `OBSERVATION_CUTOFF` (2025-12-31) and
+- Streamed events start at the later of the latest stored timestamp
+  (2026-06-29 23:00 for the seed data) and the end of the seed history
+  (2026-07-01 00:00). Scoring stays at `OBSERVATION_CUTOFF` (2025-12-31) and
   label horizons end before that, so scores are unaffected.
 - Prediction-drift rows now appear from the second `build_backend_data.py`
   run: the previous-predictions baseline survives (old code deleted
@@ -272,5 +273,5 @@ them. Runbook: `docs/streaming.md`.
   malformed rows.
 - Added a `kafka-init` service to create topics.
 - Scoring cutoff stays at `OBSERVATION_CUTOFF` (2025-12-31), so streamed rows
-  (dated after 2026-06-30) do not change features or drift yet.
+  (dated from 2026-07-01) do not change features or drift yet.
 - Not yet verified: the live Kafka -> Spark -> Postgres run.
