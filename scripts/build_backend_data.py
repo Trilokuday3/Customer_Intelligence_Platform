@@ -1,14 +1,14 @@
-"""One-shot batch job: seed raw data once, then train/persist the champion
-churn and CLV models, and compute predictions/segments/explanations into
-the API's database from whatever the raw tables currently hold. Mirrors what a real Phase 11
-scheduled retraining job would do; run manually for now.
+"""One-shot batch job: seed raw data once, train/persist the champion churn and CLV models on labeled history, then score as of the newest data day (or --as-of) into the API's database.
+Mirrors what a real Phase 11 scheduled retraining job would do; run manually for now.
 
 Usage:
-    .venv/Scripts/python.exe scripts/build_backend_data.py
+    .venv/Scripts/python.exe scripts/build_backend_data.py [--as-of YYYY-MM-DD]
 """
 
 from __future__ import annotations
 
+import argparse
+import datetime
 import os
 import sys
 from pathlib import Path
@@ -30,6 +30,7 @@ from api.build_data import (  # noqa: E402
 )
 from api.database import Base, SessionLocal, engine  # noqa: E402
 from api.models import Prediction  # noqa: E402
+from churn.labels import compute_churn_labels  # noqa: E402
 from churn.dataset import LABEL_COLUMN as CHURN_LABEL  # noqa: E402
 from churn.dataset import build_snapshot as build_churn_snapshot  # noqa: E402
 from churn.dataset import build_training_pool as build_churn_pool  # noqa: E402
@@ -46,6 +47,7 @@ from data import config  # noqa: E402
 from explainability.shap_utils import compute_shap_values  # noqa: E402
 from features.behavioral import build_feature_matrix  # noqa: E402
 from monitoring.drift import compute_feature_drift, compute_prediction_drift  # noqa: E402
+from scoring.snapshot import build_scoring_snapshot, resolve_score_as_of  # noqa: E402
 from segmentation.cluster import fit_kmeans, name_segments_from_profile, prepare_matrix, profile_clusters  # noqa: E402
 
 MODELS_DIR = ROOT / "models"
@@ -106,7 +108,22 @@ CHURN_TRAIN_CUTOFFS = ["2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30", "
 CLV_TRAIN_CUTOFFS = ["2024-09-30", "2024-12-31", "2025-03-31", "2025-06-30"]
 
 
-def main() -> None:
+def _iso_date(value: str) -> str:
+    try:
+        datetime.date.fromisoformat(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"--as-of must be an ISO date like 2026-03-31, got {value!r}") from None
+    return value
+
+
+def _no_eligible_message(score_as_of: pd.Timestamp) -> str:
+    return (
+        f"no customers are eligible for scoring as of {score_as_of.date()} "
+        "(a completed order in the 180 days before it is required)"
+    )
+
+
+def main(as_of: str | None = None) -> None:
     MODELS_DIR.mkdir(exist_ok=True)
     test_cutoff = pd.Timestamp(config.OBSERVATION_CUTOFF)
 
@@ -127,6 +144,17 @@ def main() -> None:
         tables = read_raw_tables(db)
         customers, products = tables["customers"], tables["products"]
         orders, interactions, support = tables["orders"], tables["interactions"], tables["support"]
+        score_as_of = resolve_score_as_of(as_of, orders, interactions, support)
+        print(f"scoring as of {score_as_of.date()} (labeled evaluation stays at {test_cutoff.date()})")
+        latest_train_cutoff = max(pd.Timestamp(d) for d in CHURN_TRAIN_CUTOFFS)
+        if score_as_of < latest_train_cutoff:
+            print(
+                f"  WARNING: scoring date is earlier than the latest training cutoff "
+                f"({latest_train_cutoff.date()}); the models have already seen data after it"
+            )
+        # Fail fast, before any training: eligibility needs no features.
+        if compute_churn_labels(customers, orders, score_as_of).empty:
+            sys.exit(_no_eligible_message(score_as_of))
 
         # Captured before store_predictions() overwrites the table -- the only
         # "current vs. last run" baseline available for prediction drift.
@@ -172,34 +200,35 @@ def main() -> None:
             metrics=clv_metrics,
         )
 
-        print("checking drift (training pool vs. latest snapshot, and vs. the last scoring run)...")
-        churn_feature_drift = compute_feature_drift(churn_pool[churn_feat_cols], churn_test[churn_feat_cols], churn_feat_cols)
-        clv_feature_drift = compute_feature_drift(clv_pool[clv_feat_cols], clv_test[clv_feat_cols], clv_feat_cols)
+        score_snapshot = build_scoring_snapshot(customers, orders, interactions, support, products, score_as_of)
+        if score_snapshot.empty:
+            sys.exit(_no_eligible_message(score_as_of))
+        churn_score_proba = predict_churn_probability(churn_model, score_snapshot[churn_feat_cols])
+        clv_score_pred = predict_clv(clv_model, score_snapshot[clv_feat_cols])
+
+        print("checking drift (training pool vs. the scoring snapshot, and vs. the last scoring run)...")
+        churn_feature_drift = compute_feature_drift(churn_pool[churn_feat_cols], score_snapshot[churn_feat_cols], churn_feat_cols)
+        clv_feature_drift = compute_feature_drift(clv_pool[clv_feat_cols], score_snapshot[clv_feat_cols], clv_feat_cols)
         churn_drift_rows = _drift_rows_from_features(churn_feature_drift)
         clv_drift_rows = _drift_rows_from_features(clv_feature_drift)
         if previous_churn_proba:
-            churn_pred_drift = compute_prediction_drift(previous_churn_proba, churn_test_proba)
+            churn_pred_drift = compute_prediction_drift(previous_churn_proba, churn_score_proba)
             churn_drift_rows.append({"kind": "prediction", "metric_name": "churn_probability", **churn_pred_drift})
         if previous_clv_pred:
-            clv_pred_drift = compute_prediction_drift(previous_clv_pred, clv_test_pred)
+            clv_pred_drift = compute_prediction_drift(previous_clv_pred, clv_score_pred)
             clv_drift_rows.append({"kind": "prediction", "metric_name": "predicted_clv", **clv_pred_drift})
-        store_drift_report(db, test_cutoff.date(), "churn", churn_drift_rows)
-        store_drift_report(db, test_cutoff.date(), "clv", clv_drift_rows)
+        store_drift_report(db, score_as_of.date(), "churn", churn_drift_rows)
+        store_drift_report(db, score_as_of.date(), "clv", clv_drift_rows)
         n_significant = sum(1 for r in churn_drift_rows + clv_drift_rows if r["severity"] == "significant")
         print(f"  {n_significant} metric(s) flagged significant drift" if n_significant else "  no significant drift")
 
-        print("storing predictions for the active-at-cutoff population...")
-        # churn and clv snapshots share the same eligibility rule (active_lookback_days=180
-        # on the same qualifying orders), so they cover the same customer population --
-        # merge defensively rather than assuming identical row order.
-        clv_pred_by_id = dict(zip(clv_test["customer_id"], clv_test_pred))
-        aligned_clv_pred = [clv_pred_by_id.get(cid, 0.0) for cid in churn_test["customer_id"]]
+        print(f"storing predictions for {len(score_snapshot)} customers active at the scoring date...")
         store_predictions(
-            db, churn_test["customer_id"], churn_test_proba, aligned_clv_pred, MODEL_VERSION, test_cutoff.date()
+            db, score_snapshot["customer_id"], churn_score_proba, clv_score_pred, MODEL_VERSION, score_as_of.date()
         )
 
         print("computing segments...")
-        feature_matrix = build_feature_matrix(customers, orders, interactions, support, products, test_cutoff)
+        feature_matrix = build_feature_matrix(customers, orders, interactions, support, products, score_as_of)
         X_scaled, _ = prepare_matrix(feature_matrix)
         kmeans = fit_kmeans(X_scaled, k=4)
         fm_clustered = feature_matrix.copy()
@@ -207,12 +236,12 @@ def main() -> None:
         profile = profile_clusters(fm_clustered)
         names = name_segments_from_profile(profile)
         segment_labels = [names[c] for c in kmeans.labels_]
-        store_segments(db, feature_matrix["customer_id"], segment_labels, test_cutoff.date())
+        store_segments(db, feature_matrix["customer_id"], segment_labels, score_as_of.date())
 
         print("computing SHAP explanations...")
-        shap_values, X_transformed, feature_names = compute_shap_values(churn_model, churn_test[churn_feat_cols])
+        shap_values, X_transformed, feature_names = compute_shap_values(churn_model, score_snapshot[churn_feat_cols])
         store_explanations(
-            db, churn_test["customer_id"], shap_values, X_transformed, feature_names, MODEL_VERSION, test_cutoff.date()
+            db, score_snapshot["customer_id"], shap_values, X_transformed, feature_names, MODEL_VERSION, score_as_of.date()
         )
 
         print("done.")
@@ -221,4 +250,11 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument(
+        "--as-of",
+        type=_iso_date,
+        default=None,
+        help="scoring date YYYY-MM-DD (default: the newest data day in the database)",
+    )
+    main(as_of=parser.parse_args().as_of)
