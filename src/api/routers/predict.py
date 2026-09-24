@@ -1,9 +1,10 @@
 """On-demand scoring — distinct from the batch-precomputed `predictions`
 table the other routers read. Recomputes this one customer's features
-live from the DB as of the app's reference cutoff and runs it through
-the already-trained model loaded at startup (api/main.py). Because it
-uses the same cutoff and feature code as the batch job, its output
-should match the stored prediction for the same customer exactly — see
+live from the DB as of the date the batch job scored at (the latest stored
+prediction date; the app's reference cutoff before any predictions exist)
+and runs them through the already-trained model loaded at startup
+(api/main.py). Because it uses the same date and feature code as the batch
+job, its output matches the stored prediction exactly — see
 tests/integration/test_api.py for that as an explicit consistency check.
 """
 
@@ -11,11 +12,11 @@ from __future__ import annotations
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from api.database import get_db
-from api.models import Customer, Interaction, Order, Product, SupportTicket
+from api.models import Customer, Interaction, Order, Prediction, Product, SupportTicket
 from api.schemas import ChurnPredictionResponse, ClvPredictionResponse, PredictRequest
 
 router = APIRouter(prefix="/predict", tags=["predict"])
@@ -39,6 +40,14 @@ def _build_single_customer_frame(customer_id: str, db: Session) -> dict[str, pd.
     return {"customers": customers, "orders": orders, "interactions": interactions, "support": support, "products": products}
 
 
+def _scoring_as_of(request: Request, db: Session) -> pd.Timestamp:
+    """The date the batch job scored at (the stored predictions' date), so an
+    on-demand score matches the stored one. Falls back to the app's reference
+    cutoff before any predictions exist."""
+    latest = db.scalar(select(func.max(Prediction.prediction_date)))
+    return pd.Timestamp(latest) if latest is not None else pd.Timestamp(request.app.state.reference_cutoff)
+
+
 def _score(request: Request, db: Session, customer_id: str, model_attr: str):
     model = getattr(request.app.state, model_attr, None)
     if model is None:
@@ -47,7 +56,7 @@ def _score(request: Request, db: Session, customer_id: str, model_attr: str):
     from features.behavioral import build_feature_matrix
 
     tables = _build_single_customer_frame(customer_id, db)
-    as_of = pd.Timestamp(request.app.state.reference_cutoff)
+    as_of = _scoring_as_of(request, db)
     feature_matrix = build_feature_matrix(
         tables["customers"], tables["orders"], tables["interactions"], tables["support"], tables["products"], as_of
     )
