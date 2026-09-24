@@ -28,6 +28,7 @@ data/processed/
 mlruns/
 mlartifacts/
 models/
+!deploy/models/
 
 # local API database (default sqlite fallback when DATABASE_URL isn't set)
 *.db

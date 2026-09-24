@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: customer-intelligence-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /
+    envVars:
+      - key: DATABASE_URL   # Neon connection string, include ?sslmode=require
+        sync: false
+      - key: FRONTEND_ORIGIN   # the Vercel URL, no trailing slash
+        sync: false
