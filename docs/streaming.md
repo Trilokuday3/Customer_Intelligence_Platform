@@ -1,11 +1,11 @@
 # Continuous data streaming (Kafka + Spark)
 
-> Status: verified by hand against Docker on 2026-09-24 (Docker 29.8, 8 cores, 8 GB): the full stack came up, rows landed in Postgres, a producer restart resumed IDs with no duplicates, a `spark-submit` restart (checkpoint replay) added no duplicates, and `build_backend_data.py` kept the streamed rows. Not covered: long runs, broker failure, and the `down`-without-`-v` crash-loop described below (documented from reading, not reproduced).
+> Status: verified by hand against Docker on 2026-09-24 (Docker 29.8, 8 cores, 8 GB): the full stack came up, rows landed in Postgres, a producer restart resumed IDs with no duplicates, a `spark-submit` restart (checkpoint replay) added no duplicates, and `build_backend_data.py` kept the streamed rows. Not covered: long runs, broker failure, and the `down`-without-`-v` crash-loop described below (documented from reading, not reproduced), and scoring as of the newest data day after streaming (the stream -> re-run -> scoring date advances chain, and the Postgres timestamps written by Spark), which was only checked offline on SQLite, not yet against Docker/Postgres.
 
 New orders, interactions, and support tickets for existing customers can
 stream in continuously: a host-run producer publishes to Kafka, and a Spark
 Structured Streaming job upserts them into the Postgres raw tables. Design
-and rationale: `docs/superpowers/specs/2026-09-22-continuous-data-streaming-design.md`.
+and rationale: `docs/superpowers/specs/continuous-data-streaming-design.md`.
 
 ```
 scripts/stream_producer.py  (host process)
@@ -70,7 +70,21 @@ prior `python scripts/build_backend_data.py` (the producer exits if
 
 4. Re-run `python scripts/build_backend_data.py` whenever fresh scores are
    wanted. It keeps existing (and streamed) rows and reads all tables from
-   Postgres.
+   Postgres. The scoring date printed at the start (`scoring as of ...`) is the newest data day.
+
+   Stop the producer and give Spark a few seconds to drain before re-running
+   the batch job; the tables are read one after another while Spark ingests
+   each topic separately, so a run during streaming can land on a scoring day
+   whose last events have not all arrived, making repeated runs slightly
+   non-reproducible.
+
+   The scored population changes gradually as the stream runs (for example a
+   few percent by a simulated month, and it increasingly includes customers
+   who were dormant in the seed history and receive floor-rate orders);
+   expect high-risk counts and drift to move for that reason as well as for
+   genuine behavior. Streamed interactions only move the scoring date; the
+   current feature set does not use the interactions table, so streamed orders
+   and support tickets are what change individual scores.
 
 To reset only the streaming stack (keeping Postgres data), use the narrow
 reset in the reset rule below. Do not use `down -v` for this: it also
@@ -140,10 +154,16 @@ deletes Postgres data.
 3. **Simulated clock and scoring.** Streamed events start at 2026-07-01
    00:00 on a first run (the end of the seed history; the latest seed row is
    2026-06-29 23:00) and resume from the latest stored timestamp after that.
-   Model scoring still uses the fixed `OBSERVATION_CUTOFF`
-   (2025-12-31) and the label horizons end before that, so the conclusion is
-   unchanged: streamed data does not change features, scores, or drift; row
-   counts in Postgres grow but the scores do not (yet).
+   `build_backend_data.py` scores as of the newest data day (midnight of the
+   latest event; override with `--as-of YYYY-MM-DD`), so re-running it after
+   streaming moves predictions, segments, SHAP explanations and drift. Model
+   training and the Model Center metrics stay on labeled history
+   (`OBSERVATION_CUTOFF`, 2025-12-31). At the default speed the scoring date
+   advances about 150 simulated days per real hour.
+
+   The scored population differs by date because eligibility is "completed
+   order in the previous 180 days": about 3,984 customers are scored as of
+   2026-06-29 on the seed data alone, versus 5,097 at 2025-12-31.
 4. **Producer is best-effort.** Send failures are not retried (at-least-once
    is on the Spark side), and a broker drop ends the producer loop. Restart
    it; the clock resumes from Postgres and IDs from max(Postgres, last Kafka
@@ -158,10 +178,9 @@ deletes Postgres data.
 - No new customer signups; only existing customers generate activity.
 - No live churn simulation; `churn_date` stays as generated.
 - No streaming feature engineering; Spark only ingests. Scoring stays batch.
-- Scoring cutoff stays at `OBSERVATION_CUTOFF`, so streamed events do not
-  affect model features or drift yet. Making the cutoff advance with the
-  data (for example an `--as-of` option on the batch job) is a separate
-  design decision.
+- Training cutoffs stay fixed. Streaming changes scores, segments and drift
+  (scoring is as of the newest data day) but does not retrain on streamed
+  data; rolling the training cutoffs forward is a separate design decision.
 - No exactly-once delivery; at-least-once plus idempotent upserts is the
   chosen tradeoff.
 - Not automated in CI; the Kafka -> Spark -> Postgres path is verified by

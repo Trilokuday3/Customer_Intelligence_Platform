@@ -43,7 +43,7 @@ Two different drift questions, both computed on every `build_backend_data.py` ru
 - **Feature drift**: the model's *training* population (`churn_pool` /
   `clv_pool` — every customer at every historical quarterly cutoff used
   in `CHURN_TRAIN_CUTOFFS` / `CLV_TRAIN_CUTOFFS`) vs. the *current*
-  scored population (the latest snapshot at `OBSERVATION_CUTOFF`). This
+  scored population (the scoring snapshot as of the newest data day). This
   answers "does the model still see the kind of customer it learned
   from?" — categorical columns are skipped (PSI as implemented needs an
   ordering; a categorical-drift metric would be a separate chi-squared
@@ -57,6 +57,16 @@ Two different drift questions, both computed on every `build_backend_data.py` ru
   `has_prediction_baseline: false` rather than fabricating a zero, and
   the frontend says so explicitly instead of showing a misleading
   "stable."
+
+  The previous run's stored predictions and this run's scoring predictions
+  are now from different scoring dates and usually a different set of
+  customers (eligibility is "a completed order in the 180 days before the
+  scoring date"), so prediction drift measures how the scored population
+  moved since the last run, not a change in the model (the models are only
+  retrained when the batch job is re-run on the same labeled history). The
+  first run after this change compares 5,097 customers scored at 2025-12-31
+  with about 3,984 at 2026-06-29 and will likely flag prediction drift as
+  significant once.
 
 Both are written to the `drift_reports` table (`src/api/models.py`),
 replacing the previous report for that model — the same
@@ -103,7 +113,9 @@ model): reference mean 246 days, current mean 453 days. The reference
 population pools customers as they looked at *five* historical cutoffs
 (`CHURN_TRAIN_CUTOFFS`/`CLV_TRAIN_CUTOFFS`, 2024-09-30 through
 2025-09-30) while the current population is the *single* latest
-snapshot at `OBSERVATION_CUTOFF` (2025-12-31). Averaged across cutoffs
+snapshot at `OBSERVATION_CUTOFF` (2025-12-31; the figures below were measured
+before scoring moved to the newest data day, so a re-run now reports a later,
+different current population). Averaged across cutoffs
 that start only ~9 months into `DATA_START`, the reference population
 necessarily skews toward newer accounts; by the final cutoff the same
 cohort has simply aged. `total_order_count`, `frequency`, `monetary`,

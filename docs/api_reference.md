@@ -36,10 +36,20 @@ Two different code paths serve predictions, deliberately:
   (guide 36): they're real, just computed offline and cached, the same
   pattern MLflow's model registry formalizes in Phase 11.
 - **`POST /predict/churn` and `POST /predict/clv`** recompute a single
-  customer's features live from the DB, as of the same reference cutoff,
+  customer's features live from the DB, as of the same scoring date (see "Scoring date" below),
   and run them through the model loaded at startup. `tests/integration/test_api.py`
   asserts this matches the batch-precomputed value exactly for the same
   customer — a real consistency check, not just "it returns a number."
+
+**Scoring date.** The batch job scores as of the newest data day in the
+database (midnight of the latest event), not a fixed cutoff, and stores it as
+`prediction_date`. `POST /predict/*` reads that latest `prediction_date` as its
+as-of date, so on-demand and batch scores keep matching; before any
+predictions exist it falls back to the app's reference cutoff. Pass
+`--as-of YYYY-MM-DD` to `build_backend_data.py` to score at a specific date.
+The scored population differs by date (about 3,984 customers as of 2026-06-29
+on the seed data vs 5,097 at 2025-12-31) because eligibility is "completed
+order in the previous 180 days".
 
 ## Endpoints
 

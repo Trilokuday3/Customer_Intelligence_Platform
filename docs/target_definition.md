@@ -13,7 +13,10 @@ DATA_START (2024-01-01)
    v
 OBSERVATION_CUTOFF (2025-12-31)   <- "prediction date": every feature is
    |                                 computed using only data at/before
-   |  churn horizon (90 days)        this timestamp
+   |  churn horizon (90 days)        this timestamp (the labeled
+   |                                 evaluation/test cutoff; the dashboard's
+   |                                 live scoring uses the newest data day,
+   |                                 see docs/api_reference.md "Scoring date")
    |  CLV horizon (180 days)
    v
 DATA_END (2026-06-30)

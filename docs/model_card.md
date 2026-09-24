@@ -94,6 +94,11 @@ snapshots gives 0.735 / 3.01, 5 snapshots gives 0.741 / 3.07. The headline
 figures quoted elsewhere (README, resume bullets) are the 0.735 / 3.0x
 protocol numbers, the more conservative of the two.
 
+Model metrics on this page are evaluated on labeled history (the 2025-12-31
+test set). The dashboard's predictions, segments and drift are scored as of the
+newest data day instead, which is later than the training window, so they are
+not evaluated against labels.
+
 ## Calibration (XGBoost, test set)
 
 | predicted (mean) | observed rate |
