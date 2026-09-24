@@ -1,119 +1,105 @@
 # Customer Intelligence Platform
 
-Churn prediction + predictive customer lifetime value (CLV) + behavioral
-segmentation + customer-360 analytics + cohort/retention analytics +
-explainability + a transparent retention-campaign simulator — a full
-product build (synthetic data generator → ML → FastAPI/PostgreSQL →
-Next.js dashboard → MLOps), not a notebook-only churn project.
+[![CI](https://github.com/Trilokuday3/Customer_Intelligence_Platform/actions/workflows/ci.yml/badge.svg)](https://github.com/Trilokuday3/Customer_Intelligence_Platform/actions/workflows/ci.yml)
 
-Full product/module spec: `Customer_Intelligence_Platform_Complete_Project_Guide.docx`.
-Architecture and roadmap status: [`docs/architecture.md`](docs/architecture.md).
-Churn/CLV definitions and the point-in-time design: [`docs/target_definition.md`](docs/target_definition.md).
-Table-by-table schema: [`docs/data_dictionary.md`](docs/data_dictionary.md).
+Churn prediction, predictive customer lifetime value (CLV), behavioral
+segmentation, customer-360 analytics, cohort and retention analytics,
+SHAP explainability, and a transparent retention-campaign simulator,
+served through a FastAPI + PostgreSQL backend and a Next.js dashboard.
+A full product build on synthetic data, not a notebook-only churn project.
 
-## Results at a glance
+## Architecture
 
-Every number below is reproduced, sourced output — cited from the doc
-that derives it, not restated from memory.
-
-| | |
-|---|---|
-| Churn model | XGBoost, **PR-AUC 0.735**, **3.0x lift** in the top decile vs. random targeting, time-based held-out test split (`docs/model_card.md`) |
-| CLV | Two approaches compared honestly (XGBoost regression vs. BG/NBD + Gamma-Gamma) — neither dominates the other (`docs/clv_methodology.md`) |
-| Segmentation | K-Means, k=4 chosen over the silhouette-maximizing k=2 for business usability, cross-checked against hierarchical clustering via Adjusted Rand Index (`docs/segmentation_report.md`) |
-| Explainability | SHAP, global + local drivers with a feature-value/SHAP correlation for *direction* — a plain mean-SHAP washes out for two-sided features like recency (`docs/explainability_report.md`) |
-| Drift monitoring | PSI-based feature + prediction drift; the first real run correctly flags 10 tenure-linked features as drifted and explains why from the data, rather than a synthetic pass/fail (`docs/monitoring.md`) |
-| Backend | FastAPI + PostgreSQL, on-demand `/predict/*` scoring verified to match batch-precomputed predictions exactly, not just "returns 200" (`docs/api_reference.md`) |
-| Frontend | Next.js 16 dashboard, all 8 guide-specified pages, verified end-to-end against the live backend in a real browser, not just a passing build |
-
-## Screenshots
-
-Real data, captured against the live backend — not mockups.
-
-| | |
-|---|---|
-| ![Executive dashboard](docs/screenshots/dashboard.png) Executive dashboard: segment mix and churn by acquisition channel | ![Customer 360](docs/screenshots/customer_360.png) Customer 360: churn probability, RFM, and signed SHAP drivers |
-| ![Monitoring](docs/screenshots/monitoring.png) Monitoring: PSI feature drift, reference vs. current mean per feature | ![Retention simulator](docs/screenshots/retention_simulator.png) Retention simulator: campaign economics with the uplift input labeled as an assumption |
-
-## What this demonstrates
-
-- **Point-in-time-safe ML**: every feature and label is computed as of
-  an explicit cutoff, validated across quarterly snapshots rather than
-  a random split, because the same `customer_id` recurs across
-  snapshots and a random split would leak identity-level signal
-  (`docs/target_definition.md`, `docs/model_card.md`).
-- **Honest evaluation over cherry-picked wins**: the champion model is
-  picked on validation and *then* the test numbers are reported for
-  every candidate, including the one where XGBoost's validation win
-  reverses on test by a statistically negligible margin
-  (`docs/model_card.md`, "Honest note").
-- **Batch-serving discipline**: dashboard numbers are never computed
-  inline in a request handler — they're precomputed by
-  `scripts/build_backend_data.py` and read back, the same pattern a
-  real production system uses to keep request latency independent of
-  model inference cost (`docs/api_reference.md`).
-- **Monitoring that explains itself**: drift results come with
-  reference/current means alongside the PSI score specifically so a PSI
-  spike is diagnosable, not just alarmable (`docs/monitoring.md`).
-- **Decision support, not just prediction**: the retention simulator
-  computes campaign economics from live segment data but labels its own
-  uplift assumption as an assumption, never as a measured effect
-  (`frontend/components/RetentionSimulator.tsx`).
-
-## Setup
-
-```powershell
-cd Customer_Intelligence_Platform
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
-
-# generate the synthetic dataset (writes data/raw/*.parquet, gitignored)
-python scripts/generate_data.py
-
-# run the data-quality test suite
-pytest
+```
+                         Kafka  <-  stream producer (simulated activity)
+                           |
+                     Spark Structured Streaming
+                           |  idempotent upserts
+                           v
+Synthetic data  ------>  PostgreSQL (raw tables)
+generator (seed)             |
+                             v
+                    Point-in-time features
+                             |
+              +--------------+--------------+
+              v              v              v
+           Churn            CLV        Segmentation
+        (XGBoost)    (XGBoost, BG/NBD)   (K-Means)
+              +--------------+--------------+
+                             v
+          Batch job: predictions, segments, SHAP explanations,
+          drift report  -->  PostgreSQL     MLflow (runs, registry)
+                             |
+                             v
+                    FastAPI  (reads batch results,
+                              plus on-demand /predict/*)
+                             |
+                             v
+                     Next.js dashboard
 ```
 
-A 200-customer sample of the generated data is committed under
-`data/samples/` so you can inspect the shape of the data without running
-the generator. For the full backend + dashboard (Phases 9-11), see
-`docs/api_reference.md` and `frontend/README.md`; for running it in
-Docker instead of directly on the host, see `docs/deployment.md`.
+**Data.** A generator simulates five tables (customers, products, orders,
+interactions, support tickets) with a latent activity level and a dropout
+process, so churn and RFM signal is real and learnable. It seeds
+PostgreSQL once. An optional streaming layer then keeps adding new
+orders, interactions and tickets for existing customers: a producer
+publishes to Kafka, and a Spark Structured Streaming job upserts them
+into PostgreSQL with `ON CONFLICT DO NOTHING`, so redelivery never
+creates duplicates.
 
-## Continuous data (optional)
+**Features and models.** Every feature and label is computed as of an
+explicit cutoff. Models are validated across quarterly snapshots instead
+of a random split, because the same customer recurs across snapshots and
+a random split would leak identity-level signal. Churn compares a
+baseline, logistic regression, random forest and XGBoost. CLV compares an
+XGBoost regression with a BG/NBD + Gamma-Gamma probabilistic model.
+Segmentation uses K-Means with a hierarchical-clustering cross-check.
 
-New orders, interactions, and support tickets can stream in continuously
-through Kafka and a Spark cluster into Postgres. See
-[docs/streaming.md](docs/streaming.md).
+**Batch serving.** Dashboard numbers are never computed inside a request.
+A batch job (`scripts/build_backend_data.py`) trains the models and
+precomputes predictions, segments, SHAP explanations and drift results
+into PostgreSQL, and the API reads them back. Only `/predict/*` scores on
+demand, and it is verified to match the batch predictions exactly.
 
-## Documentation
+**Explainability and monitoring.** SHAP gives global and per-customer
+drivers, with feature direction taken from the correlation between
+feature value and SHAP value (a plain mean SHAP cancels out for two-sided
+features such as recency). PSI drift monitoring covers input features and
+prediction distributions and reports reference vs. current means beside
+each score so an alert can be diagnosed. MLflow tracks experiments and
+the model registry.
 
-| Doc | Covers |
-|---|---|
-| [`docs/target_definition.md`](docs/target_definition.md) | Churn/CLV business definitions, the point-in-time design |
-| [`docs/data_dictionary.md`](docs/data_dictionary.md) | Table-by-table schema |
-| [`docs/eda_report.md`](docs/eda_report.md) | Exploratory findings that motivated the feature set |
-| [`docs/model_card.md`](docs/model_card.md) | Churn model comparison, calibration, segment error analysis |
-| [`docs/clv_methodology.md`](docs/clv_methodology.md) | CLV: XGBoost regression vs. BG/NBD + Gamma-Gamma |
-| [`docs/segmentation_report.md`](docs/segmentation_report.md) | K-Means segments, naming, hierarchical cross-check |
-| [`docs/explainability_report.md`](docs/explainability_report.md) | SHAP global/local drivers, prediction-vs-causation caveat |
-| [`docs/api_reference.md`](docs/api_reference.md) | FastAPI endpoints, batch-vs-on-demand serving design |
-| [`docs/monitoring.md`](docs/monitoring.md) | MLflow tracking, PSI drift methodology and a real worked example |
-| [`docs/deployment.md`](docs/deployment.md) | Docker images, what's needed to deploy each piece |
-| [`docs/architecture.md`](docs/architecture.md) | Repository layout, data flow, the full 12-phase roadmap status |
+**Dashboard.** Next.js 16 with Tailwind: executive summary, customer
+search and 360 view, segments, cohorts, model center, a retention
+simulator, and monitoring.
 
-## Why synthetic data
+**Delivery.** GitHub Actions runs the backend tests and the frontend lint
+and build on every push. Docker images and a compose file cover
+PostgreSQL, the API, and the optional Kafka/Spark profile.
 
-The guide recommends a public transactional/e-commerce dataset, but this
-repo generates its own instead: it gives full control over the
-point-in-time churn/CLV design (`docs/target_definition.md`) and bakes in
-a real dropout process (declining engagement before churn, refunds,
-support friction correlated with churn) so downstream modeling has
-genuine signal to find — rather than fighting an unknown real dataset's
-quirks before the pipeline itself is validated. `src/data/generator.py`
-documents the exact simulation.
+Repository layout, data flow and the phase-by-phase status are in
+[docs/architecture.md](docs/architecture.md).
 
-## Repository layout
+## Remaining
 
-See [`docs/architecture.md`](docs/architecture.md#repository-layout).
+- **Live deployment.** Nothing is hosted yet, so there is no demo link.
+  Docker artifacts exist; hosting the database, API and dashboard is not
+  done.
+- **Streaming does not reach the models yet.** Scoring stays at a fixed
+  observation cutoff, so streamed events grow the raw tables but do not
+  change features, predictions or drift. Letting the cutoff advance with
+  the data is an open design decision.
+- **Streaming scope.** No new customer signups and no live churn
+  simulation; Spark only ingests, and feature computation, training and
+  scoring stay batch. The producer is best-effort and Kafka/Spark are not
+  exercised in CI.
+- **No scheduled retraining.** The batch job runs manually; there is no
+  scheduler or automatic retrain on drift.
+- **Uncalibrated churn probabilities.** The model ranks well but is
+  overconfident in the middle of the range; post-hoc calibration (Platt or
+  isotonic) is not applied.
+- **Simulator uplift is an assumption.** The retention simulator computes
+  campaign economics from live segment data, but the uplift it applies is
+  an input, not a measured effect.
+- **Synthetic data only.** Results demonstrate the pipeline, not
+  performance on a real business's customers.
