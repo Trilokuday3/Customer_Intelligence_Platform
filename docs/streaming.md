@@ -1,6 +1,6 @@
 # Continuous data streaming (Kafka + Spark)
 
-> Status: the Python pieces are unit-tested, but the live Kafka -> Spark -> Postgres stack has not yet been verified end to end against Docker.
+> Status: verified by hand against Docker on 2026-09-24 (Docker 29.8, 8 cores, 8 GB): the full stack came up, rows landed in Postgres, a producer restart resumed IDs with no duplicates, a `spark-submit` restart (checkpoint replay) added no duplicates, and `build_backend_data.py` kept the streamed rows. Not covered: long runs, broker failure, and the `down`-without-`-v` crash-loop described below (documented from reading, not reproduced).
 
 New orders, interactions, and support tickets for existing customers can
 stream in continuously: a host-run producer publishes to Kafka, and a Spark
@@ -100,7 +100,8 @@ deletes Postgres data.
   counters start above the larger of the Postgres maximum and the last
   message on each topic, so restarts are safe even while Spark lags behind
   Kafka. The Kafka read is best-effort (a failure logs a warning and falls
-  back to Postgres) and, like the rest of this path, is unverified live.
+  back to Postgres). Verified live: a restarted producer printed starting ids
+  equal to the stored maxima and produced no duplicate keys.
 - **At-least-once, idempotent.** Spark checkpointing can redeliver a
   micro-batch after a crash; `ON CONFLICT (<pk>) DO NOTHING` (PKs
   `order_id`, `interaction_id`, `ticket_id`) makes redelivery a no-op.
@@ -163,6 +164,8 @@ deletes Postgres data.
   design decision.
 - No exactly-once delivery; at-least-once plus idempotent upserts is the
   chosen tradeoff.
-- Not automated in CI; the Kafka -> Spark -> Postgres path is meant to be
-  verified by hand against the real stack (not yet done, see the status note
-  at the top).
+- Not automated in CI; the Kafka -> Spark -> Postgres path is verified by
+  hand against the real stack (see the status note at the top).
+- kafka-python 3.x prints a `DeprecationWarning` about the plain-function
+  `key_serializer`/`value_serializer`; harmless, and the `>=2.0.3` pin allows
+  both major versions.

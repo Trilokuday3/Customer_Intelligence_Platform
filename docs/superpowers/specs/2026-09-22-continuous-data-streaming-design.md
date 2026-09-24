@@ -257,7 +257,7 @@ them. Runbook: `docs/streaming.md`.
   tenure rate would revive churned customers. Rates use seed history only
   (`restrict_to_history`), so they are identical across producer restarts.
 - Producer IDs resume from max(Postgres, last message on each Kafka topic) so
-  restarts are safe while Spark lags. The Kafka read is unverified live.
+  restarts are safe while Spark lags. Verified live on 2026-09-24.
 - Streamed events start at the later of the latest stored timestamp
   (2026-06-29 23:00 for the seed data) and the end of the seed history
   (2026-07-01 00:00). Scoring stays at `OBSERVATION_CUTOFF` (2025-12-31) and
@@ -274,4 +274,6 @@ them. Runbook: `docs/streaming.md`.
 - Added a `kafka-init` service to create topics.
 - Scoring cutoff stays at `OBSERVATION_CUTOFF` (2025-12-31), so streamed rows
   (dated from 2026-07-01) do not change features or drift yet.
-- Not yet verified: the live Kafka -> Spark -> Postgres run.
+- Verified by hand on 2026-09-24: the live Kafka -> Spark -> Postgres run,
+  producer/Spark restart safety, and the seed-once batch job (see
+  `docs/streaming.md`).
