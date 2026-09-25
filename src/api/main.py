@@ -12,7 +12,7 @@ from api.database import Base, engine
 from api.routers import analytics, customers, dashboard, explanations, model_center, monitoring, predict, segments
 
 MODELS_DIR = Path(os.environ.get("MODELS_DIR", "models"))
-MODEL_VERSION = "xgboost-v1"
+MODEL_VERSION = "xgboost-platt-v1"
 
 
 @asynccontextmanager

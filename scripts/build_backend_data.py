@@ -31,6 +31,8 @@ from api.build_data import (  # noqa: E402
 from api.database import Base, SessionLocal, engine  # noqa: E402
 from api.models import Prediction  # noqa: E402
 from churn.labels import compute_churn_labels  # noqa: E402
+from churn.calibration import fit_platt_calibrator  # noqa: E402
+from churn.dataset import GROUP_COLUMN as CHURN_GROUP  # noqa: E402
 from churn.dataset import LABEL_COLUMN as CHURN_LABEL  # noqa: E402
 from churn.dataset import build_snapshot as build_churn_snapshot  # noqa: E402
 from churn.dataset import build_training_pool as build_churn_pool  # noqa: E402
@@ -51,7 +53,7 @@ from scoring.snapshot import build_scoring_snapshot, resolve_score_as_of  # noqa
 from segmentation.cluster import fit_kmeans, name_segments_from_profile, prepare_matrix, profile_clusters  # noqa: E402
 
 MODELS_DIR = ROOT / "models"
-MODEL_VERSION = "xgboost-v1"
+MODEL_VERSION = "xgboost-platt-v1"
 MLFLOW_EXPERIMENT = "customer-intelligence"
 
 
@@ -166,7 +168,13 @@ def main(as_of: str | None = None) -> None:
         churn_cutoffs = [pd.Timestamp(d) for d in CHURN_TRAIN_CUTOFFS]
         churn_pool = build_churn_pool(customers, orders, interactions, support, products, churn_cutoffs)
         churn_feat_cols = churn_feature_columns(churn_pool)
-        churn_model = train_churn_xgboost(churn_pool[churn_feat_cols], churn_pool[CHURN_LABEL])
+        # The base model trains on every snapshot but the latest; the Platt
+        # calibrator is fitted on that held-out latest snapshot so it corrects
+        # the base model's overconfidence instead of learning its in-sample fit.
+        is_calibration = churn_pool[CHURN_GROUP] == max(churn_cutoffs)
+        churn_fit, churn_cal = churn_pool[~is_calibration], churn_pool[is_calibration]
+        churn_base = train_churn_xgboost(churn_fit[churn_feat_cols], churn_fit[CHURN_LABEL])
+        churn_model = fit_platt_calibrator(churn_base, churn_cal[churn_feat_cols], churn_cal[CHURN_LABEL])
 
         churn_test = build_churn_snapshot(customers, orders, interactions, support, products, test_cutoff)
         churn_test_proba = predict_churn_probability(churn_model, churn_test[churn_feat_cols])
@@ -176,7 +184,7 @@ def main(as_of: str | None = None) -> None:
         print("  churn PR-AUC:", round(churn_metrics["pr_auc"], 3))
         _log_to_mlflow(
             "churn",
-            churn_model,
+            churn_base,
             params={"cutoffs": ",".join(CHURN_TRAIN_CUTOFFS), "n_features": len(churn_feat_cols), "model_version": MODEL_VERSION},
             metrics=churn_metrics,
         )
@@ -239,7 +247,7 @@ def main(as_of: str | None = None) -> None:
         store_segments(db, feature_matrix["customer_id"], segment_labels, score_as_of.date())
 
         print("computing SHAP explanations...")
-        shap_values, X_transformed, feature_names = compute_shap_values(churn_model, score_snapshot[churn_feat_cols])
+        shap_values, X_transformed, feature_names = compute_shap_values(churn_base, score_snapshot[churn_feat_cols])
         store_explanations(
             db, score_snapshot["customer_id"], shap_values, X_transformed, feature_names, MODEL_VERSION, score_as_of.date()
         )
