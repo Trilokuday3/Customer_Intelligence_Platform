@@ -80,19 +80,13 @@ definitively better; on this dataset they're effectively tied, both
 clearly ahead of logistic regression, and all three are far ahead of
 baseline (PR-AUC 0.71–0.74 vs 0.29).
 
-### Why the dashboard shows 0.741, not 0.735
+### What is deployed
 
-The tables above follow the select-then-test protocol: models are trained
-on the 4 earlier snapshots (19,974 rows) and the validation snapshot is
-only used to pick the champion. The **deployed** model
-(`scripts/build_backend_data.py`) is refit on all 5 snapshots, validation
-included (25,482 rows), the usual step once model selection is done. On the
-same untouched 2025-12-31 test set that refit scores PR-AUC **0.741**, lift@10%
-**3.07** (ROC-AUC 0.863, Brier 0.156), and that is what the dashboard's Model
-Center shows. Verified by running both trainings on the seed-42 data: 4
-snapshots gives 0.735 / 3.01, 5 snapshots gives 0.741 / 3.07. The headline
-figures quoted elsewhere (README, resume bullets) are the 0.735 / 3.0x
-protocol numbers, the more conservative of the two.
+The deployed model (`scripts/build_backend_data.py`) follows the same protocol
+as the tables above: XGBoost trained on the 4 earlier snapshots, then a Platt
+calibrator (below) fitted on the 5th (validation) snapshot, which the base
+model never saw. Ranking is unchanged by calibration, so the dashboard's Model
+Center shows the same PR-AUC 0.735 and lift@10% 3.01 as the test table.
 
 Model metrics on this page are evaluated on labeled history (the 2025-12-31
 test set). The dashboard's predictions, segments and drift are scored as of the
@@ -101,25 +95,33 @@ not evaluated against labels.
 
 ## Calibration (XGBoost, test set)
 
-| predicted (mean) | observed rate |
-|---|---|
-| 0.022 | 0.020 |
-| 0.067 | 0.018 |
-| 0.138 | 0.059 |
-| 0.227 | 0.104 |
-| 0.330 | 0.173 |
-| 0.464 | 0.234 |
-| 0.593 | 0.324 |
-| 0.700 | 0.417 |
-| 0.833 | 0.653 |
-| 0.941 | 0.863 |
+The raw model is systematically **overconfident** (it predicts 0.70 where the
+observed rate is 0.42). The deployed model therefore applies Platt scaling
+(`src/churn/calibration.py`): a logistic regression on the base model's
+log-odds, fitted on the validation snapshot. It is monotone, so ROC-AUC,
+PR-AUC and lift are unchanged; probabilities become usable as risk estimates.
 
-The model is systematically **overconfident** in the upper-middle range
-(e.g. predicts 0.70, actual rate is 0.42) — ranking is strong (that's
-what PR-AUC/lift measure) but raw probabilities shouldn't be read as
-calibrated risk percentages without post-hoc calibration (Platt scaling
-or isotonic regression — listed as a Phase 5 "Optional: Calibrated
-classifier" follow-up, not yet applied here).
+| predicted (mean), raw | observed | predicted (mean), calibrated | observed |
+|---|---|---|---|
+| 0.022 | 0.020 | 0.007 | 0.020 |
+| 0.067 | 0.018 | 0.024 | 0.018 |
+| 0.138 | 0.059 | 0.053 | 0.059 |
+| 0.227 | 0.104 | 0.093 | 0.104 |
+| 0.330 | 0.173 | 0.149 | 0.173 |
+| 0.464 | 0.234 | 0.237 | 0.234 |
+| 0.593 | 0.324 | 0.344 | 0.324 |
+| 0.700 | 0.417 | 0.460 | 0.417 |
+| 0.833 | 0.653 | 0.651 | 0.653 |
+| 0.941 | 0.863 | 0.860 | 0.863 |
+
+Brier score improves from 0.159 to **0.130** on the held-out test set. Because
+scores are now lower, the fixed 0.5 cut-off means "more likely than not to
+churn": precision at 0.5 rises from 0.55 to 0.73 and recall falls from 0.81 to
+0.56 (the raw model used class weighting, which inflated its scores). The
+dashboard's "high-risk" count uses that same 0.5 cut-off, so it is smaller than
+before. The top decile is slightly under-predicted at the low end (0.007 vs
+0.020), a limit of a two-parameter curve; isotonic regression would fit it
+tighter at the cost of ties in the scores.
 
 ## Error analysis by segment (XGBoost, test set)
 
@@ -162,7 +164,7 @@ that recent activity *trend* carries real signal, and consistent with
   derived from the same latent variable that drives the churn hazard in
   the generator, so its outsized importance here is partly a
   construction artifact.
-- **No calibration step applied yet** — see above.
+- **Calibrator is fitted on one snapshot** (the validation snapshot, 5,508 rows), so it inherits that period's churn rate (28.1% vs 28.6% on test).
 - **Single random seed**: results aren't averaged over multiple seeds/
   resamples; treat point estimates as approximate, not exact.
 - **Synthetic data**: all numbers describe how well these models work on

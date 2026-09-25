@@ -75,29 +75,29 @@ simulator, and monitoring.
 
 **Delivery.** GitHub Actions runs the backend tests and the frontend lint
 and build on every push. Docker images and a compose file cover
-PostgreSQL, the API, and the optional Kafka/Spark profile.
+PostgreSQL, the API, and the optional Kafka/Spark profile. The hosted demo
+uses Neon (PostgreSQL), Render (API image with the trained models baked in)
+and Vercel (dashboard); setup is in [docs/deployment.md](docs/deployment.md).
 
 Repository layout, data flow and the phase-by-phase status are in
 [docs/architecture.md](docs/architecture.md).
 
 ## Remaining
 
-- **Live deployment.** Nothing is hosted yet, so there is no demo link.
-  Docker artifacts exist; hosting the database, API and dashboard is not
-  done.
-- **Streaming does not reach the models yet.** Scoring stays at a fixed
-  observation cutoff, so streamed events grow the raw tables but do not
-  change features, predictions or drift. Letting the cutoff advance with
-  the data is an open design decision.
+- **Hosted demo is a static snapshot.** The dashboard runs on Vercel, the API
+  on Render's free tier and the data on Neon, seeded once at the scoring date.
+  Kafka and Spark are not hosted, so streaming only runs locally, and the free
+  API sleeps when idle (a scheduled ping keeps it warm but can be delayed).
+- **Training does not roll forward.** Scoring, segments and drift follow the
+  newest data day, so streaming moves the dashboard, but the models are only
+  trained and evaluated on labeled history up to a fixed cutoff. Rolling the
+  training cutoffs forward as data matures is an open design decision.
 - **Streaming scope.** No new customer signups and no live churn
   simulation; Spark only ingests, and feature computation, training and
   scoring stay batch. The producer is best-effort and Kafka/Spark are not
   exercised in CI.
 - **No scheduled retraining.** The batch job runs manually; there is no
   scheduler or automatic retrain on drift.
-- **Uncalibrated churn probabilities.** The model ranks well but is
-  overconfident in the middle of the range; post-hoc calibration (Platt or
-  isotonic) is not applied.
 - **Simulator uplift is an assumption.** The retention simulator computes
   campaign economics from live segment data, but the uplift it applies is
   an input, not a measured effect.

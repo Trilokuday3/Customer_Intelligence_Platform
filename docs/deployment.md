@@ -41,38 +41,45 @@ docker run -p 3000:3000 -e NEXT_PUBLIC_API_BASE_URL=http://host.docker.internal:
 ```
 
 `NEXT_PUBLIC_API_BASE_URL` is inlined into the JS bundle at `next build`
-time (it's a `NEXT_PUBLIC_*` var), so it must be passed as a build arg,
-not a runtime `-e`, for a build that will run somewhere other than
-`localhost:8000` — the `Dockerfile` above is written for a
-same-machine demo; a real deployment needs a `--build-arg` and a
-matching `ARG`/`ENV` pair added to the Dockerfile before the API's real
-address is known.
+time, so it must exist before the build: `frontend/Dockerfile` takes it as
+`--build-arg NEXT_PUBLIC_API_BASE_URL=...`, and on Vercel it is a project
+environment variable that needs a redeploy when it changes.
 
-## Where each piece would actually go
+## Hosted setup (Neon + Render + Vercel)
 
-- **Postgres** — any managed Postgres (Render, Railway, Neon, RDS).
-  Point `DATABASE_URL` at it; `docker-compose.yml`'s `postgres` service
-  is for local dev only, not a production database.
-- **FastAPI** — any container host that can run the root `Dockerfile`
-  (Render, Railway, Fly.io). Needs `DATABASE_URL` and `FRONTEND_ORIGIN`
-  set, and `models/*.joblib` present in the container — either baked in
-  at build time (drop the bind-mount, `COPY models/ models/` in the
-  `Dockerfile` instead) or produced by a retraining job with access to
-  the same volume/object store.
-- **Next.js frontend** — Vercel is the path of least resistance for a
-  Next.js App Router project (no Dockerfile needed there at all); the
-  `frontend/Dockerfile` here is for deploying it anywhere else a
-  container is preferred. Either way it needs `NEXT_PUBLIC_API_BASE_URL`
-  set to the FastAPI deployment's public URL at build time.
-- **MLflow** (optional) — `docs/monitoring.md` covers the local
-  `sqlite:///mlflow.db` default; a real deployment would point
-  `MLFLOW_TRACKING_URI` at a hosted MLflow instance or a `mlflow server`
-  process with a real database backend, not the local file used here.
+Order matters because the URLs depend on each other.
 
-## What's intentionally not built
+1. **Neon**: create a project, copy the connection string. It must end with
+   `?sslmode=require`.
+2. **Seed** (your machine): set `DATABASE_URL` to the Neon string, then
+   `python scripts/build_backend_data.py`. Seeding is one-time (see above).
+   Check the size: `select pg_size_pretty(pg_database_size(current_database()));`
+   (free tier is about 0.5 GB).
+3. **Bake the models**: copy `models/*.joblib` to `deploy/models/`, commit and
+   push. The image must carry the exact models that produced the stored
+   predictions, otherwise `POST /predict/*` drifts from the stored scores.
+   Repeat this step whenever the database is re-seeded.
+4. **Render**: New Blueprint from the GitHub repo (reads `render.yaml`). Enter
+   `DATABASE_URL` (Neon string) and a temporary `FRONTEND_ORIGIN`. Note the URL.
+5. **Vercel**: import the repo, Root Directory `frontend`, add
+   `NEXT_PUBLIC_API_BASE_URL` = the Render URL (no trailing slash), deploy.
+6. **Render**: set `FRONTEND_ORIGIN` to the Vercel URL (no trailing slash) and
+   redeploy, so CORS allows the dashboard.
+7. **GitHub**: add the repository variable `API_URL` (Render URL) so
+   `.github/workflows/keep-warm.yml` starts pinging `GET /` every 10 minutes.
 
-No CI/CD pipeline, no infrastructure-as-code, no auto-deploy on push.
-The guide's Phase 12 scope is "deployment" as in *deployable*, not a
-maintained production service — this is a portfolio project, and
-`docs/architecture.md` / `docs/monitoring.md` already say plainly where
-its retraining and monitoring are manual rather than scheduled.
+The API image installs only `.[api,serve]` (no shap/lightgbm/lifetimes) to fit
+Render's 512 MB, and honours Render's `$PORT`.
+
+Checks: `<api>/` and `<api>/monitoring/health` return 200 with row counts;
+`POST <api>/predict/churn` equals `GET <api>/customers/{id}`
+`churn_probability`; dashboard pages show numbers, not the error state.
+
+Free-tier caveats: Render sleeps after about 15 idle minutes (the keep-warm
+ping mitigates, and can be delayed by GitHub); the first request after a long
+pause can be slow. The API is public and unauthenticated over synthetic data.
+
+- **MLflow** stays local (`sqlite:///mlflow.db` default, see
+  `docs/monitoring.md`); no hosted tracking server.
+- No auto-retraining or scheduled batch job: re-seeding and re-baking models
+  is a manual runbook step.

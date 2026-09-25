@@ -1,0 +1,22 @@
+name: keep-warm
+
+# Render's free tier sleeps after ~15 minutes idle. Ping the liveness route
+# (it never touches the database, so Neon can still scale to zero).
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping the API
+        env:
+          API_URL: ${{ vars.API_URL }}
+        run: |
+          if [ -z "$API_URL" ]; then
+            echo "API_URL repository variable not set; nothing to do."
+            exit 0
+          fi
+          curl -fsS --max-time 60 "${API_URL%/}/"

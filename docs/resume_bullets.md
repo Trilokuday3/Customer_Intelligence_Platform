@@ -4,6 +4,12 @@ Draft bullets to adapt, not paste verbatim — trim to whichever role
 you're targeting. Every number here is sourced from a doc in this repo
 (cited inline) so you can defend it in an interview.
 
+Interview note: the churn figures below (0.735 PR-AUC, 3.0x lift) match the
+live dashboard's Model Center, because the deployed model follows the same
+select-then-test protocol. Its probabilities are Platt-calibrated on a
+held-out snapshot (Brier 0.159 to 0.130, ranking unchanged;
+`docs/model_card.md`, "Calibration").
+
 ## Project summary (one line)
 
 Built an end-to-end customer intelligence platform — churn prediction,
