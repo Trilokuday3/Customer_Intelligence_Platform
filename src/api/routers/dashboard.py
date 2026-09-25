@@ -8,11 +8,12 @@ from sqlalchemy.orm import Session
 
 from api.database import get_db
 from api.models import Customer, CustomerSegment, Prediction
-from api.schemas import DashboardSummary
+from api.schemas import DashboardSummary, RiskBin, RiskDistribution
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 HIGH_RISK_THRESHOLD = 0.5
+RISK_BIN_COUNT = 20
 
 
 @router.get("/summary", response_model=DashboardSummary)
@@ -64,4 +65,26 @@ def get_summary(db: Session = Depends(get_db)) -> DashboardSummary:
         mean_predicted_clv=float(mean_clv),
         segment_distribution=segment_distribution,
         prediction_date=latest_date,
+    )
+
+
+@router.get("/risk-distribution", response_model=RiskDistribution)
+def get_risk_distribution(db: Session = Depends(get_db)) -> RiskDistribution:
+    """Histogram of churn probabilities at the latest scoring date, in
+    equal-width bins. Binned in Python from one column so it behaves the
+    same on Postgres and the SQLite test database."""
+    latest_date = db.scalar(select(func.max(Prediction.prediction_date)))
+    counts = [0] * RISK_BIN_COUNT
+    if latest_date is not None:
+        probabilities = db.scalars(
+            select(Prediction.churn_probability).where(Prediction.prediction_date == latest_date)
+        ).all()
+        for probability in probabilities:
+            index = min(int(probability * RISK_BIN_COUNT), RISK_BIN_COUNT - 1)
+            counts[max(index, 0)] += 1
+    width = 1 / RISK_BIN_COUNT
+    return RiskDistribution(
+        prediction_date=latest_date,
+        total=sum(counts),
+        bins=[RiskBin(lower=round(i * width, 4), upper=round((i + 1) * width, 4), count=c) for i, c in enumerate(counts)],
     )

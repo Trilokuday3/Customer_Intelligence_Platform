@@ -160,6 +160,16 @@ class TestDashboard:
         assert sum(body["segment_distribution"].values()) == api_setup["n_customers"]
 
 
+    def test_risk_distribution_bins_every_scored_customer(self, api_setup):
+        resp = api_setup["client"].get("/dashboard/risk-distribution")
+        body = resp.json()
+        assert resp.status_code == 200
+        assert body["total"] == len(api_setup["churn_snapshot"])
+        assert sum(b["count"] for b in body["bins"]) == body["total"]
+        assert len(body["bins"]) == 20
+        assert body["bins"][0]["lower"] == 0.0 and body["bins"][-1]["upper"] == 1.0
+
+
 class TestCustomers:
     def test_list_returns_all_customers(self, api_setup):
         resp = api_setup["client"].get("/customers", params={"page_size": 5})

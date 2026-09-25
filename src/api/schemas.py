@@ -19,6 +19,18 @@ class DashboardSummary(BaseModel):
     prediction_date: date
 
 
+class RiskBin(BaseModel):
+    lower: float
+    upper: float
+    count: int
+
+
+class RiskDistribution(BaseModel):
+    prediction_date: date | None
+    total: int
+    bins: list[RiskBin]
+
+
 class CustomerListItem(BaseModel):
     customer_id: str
     plan: str

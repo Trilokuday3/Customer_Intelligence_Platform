@@ -56,6 +56,7 @@ order in the previous 180 days".
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/dashboard/summary` | totals, high-risk count, revenue at risk, segment distribution |
+| GET | `/dashboard/risk-distribution` | 20 equal-width bins of churn probability at the latest scoring date (feeds the overview's risk ribbon) |
 | GET | `/customers` | search/filter (segment, plan, churn/CLV range), sort, paginate |
 | GET | `/customers/{id}` | profile + latest prediction + segment + live RFM |
 | GET | `/customers/{id}/history` | merged order/interaction/support timeline |
