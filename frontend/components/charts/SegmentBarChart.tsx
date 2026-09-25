@@ -11,7 +11,7 @@ import dynamic from "next/dynamic";
 // dimensions (see SegmentBarChartImpl.tsx) so there's no layout shift.
 const SegmentBarChart = dynamic(() => import("./SegmentBarChartImpl"), {
   ssr: false,
-  loading: () => <div style={{ width: 480, height: 220 }} />,
+  loading: () => <div style={{ width: 500, height: 240 }} />,
 });
 
 export default SegmentBarChart;

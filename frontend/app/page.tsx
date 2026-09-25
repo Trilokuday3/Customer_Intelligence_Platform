@@ -1,44 +1,75 @@
-import { getChurnByDimension, getDashboardSummary } from "@/lib/api";
+import { getChurnByDimension, getDashboardSummary, getRiskDistribution } from "@/lib/api";
 import { formatCurrency, formatDate, formatNumber, formatPercent } from "@/lib/format";
-import StatTile from "@/components/StatTile";
+import KpiStrip from "@/components/KpiStrip";
+import Panel from "@/components/Panel";
+import PageHeader, { AsOfChip } from "@/components/PageHeader";
+import RiskRibbon from "@/components/RiskRibbon";
 import SegmentBarChart from "@/components/charts/SegmentBarChart";
 import ChurnByDimensionChart from "@/components/charts/ChurnByDimensionChart";
 
 export default async function DashboardPage() {
-  const [summary, churnByChannel] = await Promise.all([
+  const [summary, churnByChannel, distribution] = await Promise.all([
     getDashboardSummary(),
     getChurnByDimension("acquisition_channel"),
+    // The ribbon is an enhancement: an older API without this route must not break the page.
+    getRiskDistribution().catch(() => null),
   ]);
 
   const segmentData = Object.entries(summary.segment_distribution).map(([segment, count]) => ({ segment, count }));
+  const highRiskShare = summary.scored_customers ? summary.high_risk_count / summary.scored_customers : 0;
 
   return (
-    <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="text-2xl font-medium">Executive Overview</h1>
-        <p className="mt-1 text-sm text-ink-soft">
-          As of {formatDate(summary.prediction_date)} · {formatNumber(summary.total_customers)} customers,{" "}
-          {formatNumber(summary.scored_customers)} scored
-        </p>
-      </div>
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Overview"
+        description="Who is likely to leave, what that puts at risk, and where the customer base sits today."
+        meta={<AsOfChip label={`Scored as of ${formatDate(summary.prediction_date)}`} />}
+      />
 
-      <div className="grid grid-cols-2 gap-x-8 gap-y-6 md:grid-cols-5">
-        <StatTile label="Total customers" value={formatNumber(summary.total_customers)} />
-        <StatTile label="High-risk customers" value={formatNumber(summary.high_risk_count)} tone="risk" />
-        <StatTile label="Revenue at risk" value={formatCurrency(summary.revenue_at_risk)} tone="risk" />
-        <StatTile label="Mean predicted CLV" value={formatCurrency(summary.mean_predicted_clv)} tone="value" />
-        <StatTile label="Mean churn probability" value={formatPercent(summary.mean_churn_probability)} />
-      </div>
+      <KpiStrip
+        items={[
+          {
+            label: "Revenue at risk",
+            value: formatCurrency(summary.revenue_at_risk),
+            tone: "critical",
+            note: "Predicted CLV of high-risk customers",
+          },
+          {
+            label: "High-risk customers",
+            value: formatNumber(summary.high_risk_count),
+            tone: "critical",
+            note: `${formatPercent(highRiskShare, 0)} of scored`,
+          },
+          {
+            label: "Customers",
+            value: formatNumber(summary.total_customers),
+            note: `${formatNumber(summary.scored_customers)} scored`,
+          },
+          { label: "Mean predicted CLV", value: formatCurrency(summary.mean_predicted_clv), tone: "value", note: "Next 180 days" },
+          { label: "Mean churn probability", value: formatPercent(summary.mean_churn_probability), note: "Across scored customers" },
+        ]}
+      />
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
-        <section className="rounded border border-line bg-surface p-5">
-          <h2 className="text-sm font-medium text-ink-soft">Segment distribution</h2>
-          <SegmentBarChart data={segmentData} />
-        </section>
-        <section className="rounded border border-line bg-surface p-5">
-          <h2 className="text-sm font-medium text-ink-soft">Churn rate by acquisition channel</h2>
-          <ChurnByDimensionChart data={churnByChannel} />
-        </section>
+      {distribution && distribution.total > 0 ? (
+        <Panel
+          title="Churn risk across every scored customer"
+          description="Each bar is a 5-point slice of churn probability. Colour is the risk band."
+        >
+          <RiskRibbon bins={distribution.bins} total={distribution.total} />
+        </Panel>
+      ) : null}
+
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <Panel title="Customers by segment" description="Behavioural clusters, named from how each group buys.">
+          <div className="overflow-x-auto">
+            <SegmentBarChart data={segmentData} />
+          </div>
+        </Panel>
+        <Panel title="Churn rate by acquisition channel" description="Mean predicted churn probability per channel.">
+          <div className="overflow-x-auto">
+            <ChurnByDimensionChart data={churnByChannel} />
+          </div>
+        </Panel>
       </div>
     </div>
   );

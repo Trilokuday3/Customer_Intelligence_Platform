@@ -1,4 +1,16 @@
 import { getCohorts } from "@/lib/api";
+import PageHeader from "@/components/PageHeader";
+import Panel from "@/components/Panel";
+
+// Retention is good news, so it uses the action blue rather than the risk scale.
+function cellStyle(value: number) {
+  // Most cells sit in a narrow band, so stretch 30%..70% across the whole ramp.
+  const strength = Math.min(Math.max((value - 30) / 40, 0), 1);
+  return {
+    backgroundColor: `rgba(43, 95, 217, ${(0.06 + strength * 0.94).toFixed(2)})`,
+    color: strength > 0.45 ? "#ffffff" : "#101828",
+  };
+}
 
 export default async function CohortsPage() {
   const rows = await getCohorts();
@@ -9,54 +21,61 @@ export default async function CohortsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-medium">Cohort Retention</h1>
-        <p className="mt-1 text-sm text-ink-soft">
-          % of each signup cohort with a qualifying order, by months since signup.
-        </p>
-      </div>
+      <PageHeader
+        title="Cohort retention"
+        description="Of the customers who signed up in a given month, the share who still placed a qualifying order N months later. Read across a row to see how fast a cohort fades."
+      />
 
-      <div className="overflow-x-auto">
-        <table className="text-sm">
-          <thead>
-            <tr>
-              <th className="sticky left-0 bg-paper py-1 pr-4 text-left font-medium text-ink-soft">Cohort</th>
-              {ages.map((age) => (
-                <th key={age} className="tabular px-2 py-1 text-center font-medium text-ink-soft">
-                  {age}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {months.map((month) => (
-              <tr key={month}>
-                <td className="sticky left-0 bg-paper py-1 pr-4 text-ink-soft">{month}</td>
-                {ages.map((age) => {
-                  const value = byKey.get(`${month}:${age}`);
-                  return (
-                    <td key={age} className="p-0.5">
-                      {value !== undefined ? (
-                        <div
-                          className="tabular flex h-10 w-14 items-center justify-center rounded-sm text-xs"
-                          style={{
-                            backgroundColor: `rgba(41, 105, 79, ${Math.min(value / 70, 1).toFixed(2)})`,
-                            color: value > 35 ? "#ffffff" : "#14181f",
-                          }}
-                        >
-                          {value.toFixed(0)}
-                        </div>
-                      ) : (
-                        <div className="h-10 w-14" />
-                      )}
-                    </td>
-                  );
-                })}
+      <Panel title="Retention by signup month" description="Columns are months since signup. Darker means more of the cohort is still buying.">
+        <div className="overflow-x-auto">
+          <table className="border-separate border-spacing-[3px] text-sm">
+            <thead>
+              <tr>
+                <th className="sticky left-0 bg-surface pr-3 text-left text-[13px] font-medium text-ink-soft">Cohort</th>
+                {ages.map((age) => (
+                  <th key={age} className="tabular px-1 pb-1 text-center text-xs font-medium text-ink-soft">
+                    {age}
+                  </th>
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {months.map((month) => (
+                <tr key={month}>
+                  <td className="tabular sticky left-0 bg-surface pr-3 text-[13px] text-ink-soft">{month}</td>
+                  {ages.map((age) => {
+                    const value = byKey.get(`${month}:${age}`);
+                    return (
+                      <td key={age} className="p-0">
+                        {value !== undefined ? (
+                          <div
+                            className="tabular flex h-9 w-12 items-center justify-center rounded-md text-xs font-medium"
+                            style={cellStyle(value)}
+                            title={`${month}, month ${age}: ${value.toFixed(1)}% retained`}
+                          >
+                            {value.toFixed(0)}
+                          </div>
+                        ) : (
+                          <div className="h-9 w-12" />
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="mt-5 flex items-center gap-3 text-xs text-ink-soft">
+          <span>30% or less</span>
+          <span
+            className="h-2 w-40 rounded-full"
+            style={{ background: "linear-gradient(to right, rgba(43,95,217,0.08), rgba(43,95,217,1))" }}
+            aria-hidden
+          />
+          <span>70% or more retained</span>
+        </div>
+      </Panel>
     </div>
   );
 }

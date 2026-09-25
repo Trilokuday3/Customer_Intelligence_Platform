@@ -1,18 +1,30 @@
 @import "tailwindcss";
 
 :root {
-  --paper: #f1f3f1;
+  --paper: #f4f5f7;
   --surface: #ffffff;
-  --ink: #14181f;
-  --ink-soft: #4b5563;
-  --line: #d8ddd9;
-  --risk: #b0402a;
-  --risk-soft: #f3e2dc;
-  --retain: #29694f;
-  --retain-soft: #dfeee7;
-  --value: #9c7a22;
-  --value-soft: #f2e9d3;
-  --accent: #1d3557;
+  --ink: #101828;
+  --ink-soft: #667085;
+  --line: #e3e6eb;
+  --line-strong: #cfd4dc;
+  --accent: #2b5fd9;
+  --accent-soft: #e8effc;
+  --sidebar: #0f1b2d;
+  --sidebar-line: #1d2b42;
+  --sidebar-ink: #a9b6cb;
+
+  /* One risk scale, used identically by pills, bars, charts and tables. */
+  --healthy: #2f8f6b;
+  --healthy-soft: #e2f3ec;
+  --watch: #c9931a;
+  --watch-soft: #fbf0d4;
+  --high: #e5603f;
+  --high-soft: #fde6df;
+  --critical: #b42318;
+  --critical-soft: #fbe3e0;
+
+  --value: #9a7414;
+  --value-soft: #f6ecd2;
 }
 
 @theme inline {
@@ -21,39 +33,127 @@
   --color-ink: var(--ink);
   --color-ink-soft: var(--ink-soft);
   --color-line: var(--line);
-  --color-risk: var(--risk);
-  --color-risk-soft: var(--risk-soft);
-  --color-retain: var(--retain);
-  --color-retain-soft: var(--retain-soft);
+  --color-line-strong: var(--line-strong);
+  --color-accent: var(--accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-line: var(--sidebar-line);
+  --color-sidebar-ink: var(--sidebar-ink);
+  --color-healthy: var(--healthy);
+  --color-healthy-soft: var(--healthy-soft);
+  --color-watch: var(--watch);
+  --color-watch-soft: var(--watch-soft);
+  --color-high: var(--high);
+  --color-high-soft: var(--high-soft);
+  --color-critical: var(--critical);
+  --color-critical-soft: var(--critical-soft);
   --color-value: var(--value);
   --color-value-soft: var(--value-soft);
-  --color-accent: var(--accent);
-  --font-sans: var(--font-space-grotesk);
-  --font-mono: var(--font-plex-mono);
+  /* Aliases so older class names keep resolving to the risk scale. */
+  --color-risk: var(--critical);
+  --color-risk-soft: var(--critical-soft);
+  --color-retain: var(--healthy);
+  --color-retain-soft: var(--healthy-soft);
+  --font-sans: var(--font-figtree);
 }
 
 body {
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--font-sans);
+  font-family: var(--font-sans), system-ui, sans-serif;
 }
 
 .tabular {
-  font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Tables: one treatment for every list in the product. */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+.data-table thead th {
+  background: #fafbfc;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-soft);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  padding: 0.625rem 1rem;
+  text-align: left;
+  white-space: nowrap;
+}
+.data-table tbody td {
+  border-bottom: 1px solid var(--line);
+  padding: 0.75rem 1rem;
+}
+.data-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+.data-table tbody tr:hover td {
+  background: #f8f9fb;
+}
+.data-table .num {
+  text-align: right;
+}
+
+/* Form controls */
+.field {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  border-radius: 8px;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  color: var(--ink);
+  outline: none;
+  transition: border-color 120ms, box-shadow 120ms;
+}
+.field:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border-radius: 8px;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: background 120ms;
+}
+.btn-primary:hover {
+  background: #244fb8;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The one orchestrated motion: risk ribbon bars rise on load. */
+@keyframes rise {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: scaleY(1);
+  }
+}
+.ribbon-bar {
+  transform-origin: bottom;
+  animation: rise 700ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes risk-reveal {
   from {
     opacity: 0;
-    transform: scale(0.92);
+    transform: scale(0.96);
   }
   to {
     opacity: 1;
     transform: scale(1);
   }
 }
-
 .risk-reveal {
   display: inline-block;
   animation: risk-reveal 450ms cubic-bezier(0.16, 1, 0.3, 1) both;

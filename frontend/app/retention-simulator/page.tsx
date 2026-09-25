@@ -1,4 +1,5 @@
 import { listSegments } from "@/lib/api";
+import PageHeader from "@/components/PageHeader";
 import RetentionSimulator from "@/components/RetentionSimulator";
 
 export default async function RetentionSimulatorPage() {
@@ -6,13 +7,10 @@ export default async function RetentionSimulatorPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-medium">Retention Simulator</h1>
-        <p className="mt-1 text-sm text-ink-soft">
-          A transparent scenario tool (guide section 17) — it does not claim the model proves an intervention will
-          work. Every uplift figure here is an assumption you set, not a measured effect.
-        </p>
-      </div>
+      <PageHeader
+        title="Retention simulator"
+        description="Test a campaign on one segment. The save rate is an assumption you set, not a measured effect, so read every result as what would happen if that uplift held."
+      />
       <RetentionSimulator segments={segments} />
     </div>
   );

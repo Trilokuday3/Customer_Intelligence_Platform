@@ -11,6 +11,18 @@ export interface DashboardSummary {
   prediction_date: string;
 }
 
+export interface RiskBin {
+  lower: number;
+  upper: number;
+  count: number;
+}
+
+export interface RiskDistribution {
+  prediction_date: string | null;
+  total: number;
+  bins: RiskBin[];
+}
+
 export interface CustomerListItem {
   customer_id: string;
   plan: string;

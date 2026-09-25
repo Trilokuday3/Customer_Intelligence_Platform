@@ -9,6 +9,7 @@ import type {
   ExplanationResponse,
   HealthCheck,
   ModelMetrics,
+  RiskDistribution,
   SegmentDetail,
   SegmentSummary,
 } from "./types";
@@ -34,6 +35,10 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
 export function getDashboardSummary(): Promise<DashboardSummary> {
   return apiFetch("/dashboard/summary");
+}
+
+export function getRiskDistribution(): Promise<RiskDistribution> {
+  return apiFetch("/dashboard/risk-distribution");
 }
 
 export interface CustomerListParams {

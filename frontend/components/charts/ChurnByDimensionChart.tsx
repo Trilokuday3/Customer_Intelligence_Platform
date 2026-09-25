@@ -7,7 +7,7 @@ import dynamic from "next/dynamic";
 // client's, which is a real hydration mismatch, not a stylistic choice.
 const ChurnByDimensionChart = dynamic(() => import("./ChurnByDimensionChartImpl"), {
   ssr: false,
-  loading: () => <div style={{ width: 480, height: 220 }} />,
+  loading: () => <div style={{ width: 500, height: 240 }} />,
 });
 
 export default ChurnByDimensionChart;

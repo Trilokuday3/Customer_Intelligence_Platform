@@ -2,6 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/format";
+import KpiStrip from "@/components/KpiStrip";
+import Panel from "@/components/Panel";
 import type { SegmentSummary } from "@/lib/types";
 
 const UPLIFT_SCENARIOS = [5, 10, 15, 20, 25, 30];
@@ -26,89 +28,92 @@ export default function RetentionSimulator({ segments }: { segments: SegmentSumm
   }, [segment, targetPct, upliftPct, interventionCost]);
 
   if (!segment || !scenario) {
-    return <p className="text-sm text-ink-soft">No segments available — run scripts/build_backend_data.py first.</p>;
+    return <p className="text-sm text-ink-soft">No segments available. Run scripts/build_backend_data.py first.</p>;
   }
 
+  const positive = scenario.netValue >= 0;
+
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex flex-wrap items-end gap-6 border-b border-line pb-6">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-ink-soft">Segment</span>
-          <select
-            value={segmentName}
-            onChange={(e) => setSegmentName(e.target.value)}
-            className="rounded border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent"
-          >
-            {segments.map((s) => (
-              <option key={s.segment} value={s.segment}>
-                {s.segment}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-ink-soft">Intervention cost / customer</span>
-          <input
-            type="number"
-            value={interventionCost}
-            onChange={(e) => setInterventionCost(Number(e.target.value))}
-            className="tabular w-32 rounded border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-ink-soft">% of at-risk customers targeted</span>
-          <input
-            type="number"
-            value={targetPct}
-            min={0}
-            max={100}
-            onChange={(e) => setTargetPct(Number(e.target.value))}
-            className="tabular w-24 rounded border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-ink-soft">Assumed save/uplift rate</span>
-          <input
-            type="number"
-            value={upliftPct}
-            min={0}
-            max={100}
-            onChange={(e) => setUpliftPct(Number(e.target.value))}
-            className="tabular w-24 rounded border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent"
-          />
-        </label>
-      </div>
-
-      <div className="rounded border border-value bg-value-soft p-4 text-sm text-ink">
-        <strong>Assumption, not a measurement.</strong> The {upliftPct}% save rate above is a scenario input you set —
-        it is not derived from an experiment. Treat every number below as &ldquo;if this uplift held,&rdquo; not as a
-        forecast.
-        See guide section 17/18: only a randomized experiment can establish a real causal save rate.
-      </div>
-
-      <div className="grid grid-cols-2 gap-x-8 gap-y-6 md:grid-cols-4">
-        <Stat label="At-risk in segment" value={formatNumber(Math.round(scenario.atRisk))} />
-        <Stat label="Targeted customers" value={formatNumber(Math.round(scenario.targeted))} />
-        <Stat label="Assumed retained value" value={formatCurrency(scenario.retainedValue)} tone="value" />
-        <Stat label="Campaign cost" value={formatCurrency(scenario.campaignCost)} tone="risk" />
-      </div>
-
-      <div>
-        <div className={`tabular text-3xl font-medium ${scenario.netValue >= 0 ? "text-retain" : "text-risk"}`}>
-          {formatCurrency(scenario.netValue)}
+    <div className="flex flex-col gap-6">
+      <Panel title="Scenario" description="Change any input and every number below updates.">
+        <div className="flex flex-wrap items-end gap-4">
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium text-ink-soft">
+            Segment
+            <select value={segmentName} onChange={(e) => setSegmentName(e.target.value)} className="field w-48">
+              {segments.map((s) => (
+                <option key={s.segment} value={s.segment}>
+                  {s.segment}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium text-ink-soft">
+            Cost per customer (₹)
+            <input
+              type="number"
+              value={interventionCost}
+              onChange={(e) => setInterventionCost(Number(e.target.value))}
+              className="field tabular w-36"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium text-ink-soft">
+            At-risk customers targeted (%)
+            <input
+              type="number"
+              value={targetPct}
+              min={0}
+              max={100}
+              onChange={(e) => setTargetPct(Number(e.target.value))}
+              className="field tabular w-40"
+            />
+          </label>
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium text-ink-soft">
+            Assumed save rate (%)
+            <input
+              type="number"
+              value={upliftPct}
+              min={0}
+              max={100}
+              onChange={(e) => setUpliftPct(Number(e.target.value))}
+              className="field tabular w-36"
+            />
+          </label>
         </div>
-        <div className="text-sm text-ink-soft">Assumed net value at {upliftPct}% uplift</div>
+      </Panel>
+
+      <div
+        className="rounded-[10px] border px-5 py-4 text-sm leading-relaxed"
+        style={{ borderColor: "#e8d49a", backgroundColor: "#fbf3da" }}
+        role="note"
+      >
+        <strong className="font-semibold">This is an assumption, not a measurement.</strong> The {upliftPct}% save rate is
+        a scenario input you set; no experiment produced it. Treat every figure as &ldquo;if this uplift held&rdquo;, not
+        as a forecast. Only a randomised test can establish a real save rate.
       </div>
 
-      <section>
-        <h2 className="text-sm font-medium text-ink-soft">Sensitivity across uplift assumptions</h2>
-        <table className="mt-3 w-full text-sm">
+      <KpiStrip
+        items={[
+          { label: "At risk in segment", value: formatNumber(Math.round(scenario.atRisk)) },
+          { label: "Targeted", value: formatNumber(Math.round(scenario.targeted)) },
+          { label: "Assumed retained value", value: formatCurrency(scenario.retainedValue), tone: "value" },
+          { label: "Campaign cost", value: formatCurrency(scenario.campaignCost), tone: "critical" },
+          {
+            label: `Net value at ${upliftPct}% save rate`,
+            value: formatCurrency(scenario.netValue),
+            tone: positive ? "healthy" : "critical",
+            note: positive ? "Campaign pays for itself" : "Campaign costs more than it saves",
+          },
+        ]}
+      />
+
+      <Panel title="Sensitivity to the save rate" description="The same campaign under different assumed uplifts." flush>
+        <table className="data-table">
           <thead>
-            <tr className="border-b border-line text-left text-ink-soft">
-              <th className="py-2 font-medium">Assumed uplift</th>
-              <th className="py-2 text-right font-medium">Retained value</th>
-              <th className="py-2 text-right font-medium">Campaign cost</th>
-              <th className="py-2 text-right font-medium">Net value</th>
+            <tr>
+              <th>Assumed save rate</th>
+              <th className="num">Retained value</th>
+              <th className="num">Campaign cost</th>
+              <th className="num">Net value</th>
             </tr>
           </thead>
           <tbody>
@@ -118,12 +123,16 @@ export default function RetentionSimulator({ segments }: { segments: SegmentSumm
               const retainedValue = retained * segment.mean_predicted_clv;
               const campaignCost = targeted * interventionCost;
               const netValue = retainedValue - campaignCost;
+              const selected = pct === upliftPct;
               return (
-                <tr key={pct} className={`border-b border-line/60 ${pct === upliftPct ? "bg-value-soft" : ""}`}>
-                  <td className="tabular py-2">{formatPercent(pct / 100, 0)}</td>
-                  <td className="tabular py-2 text-right">{formatCurrency(retainedValue)}</td>
-                  <td className="tabular py-2 text-right">{formatCurrency(campaignCost)}</td>
-                  <td className={`tabular py-2 text-right ${netValue >= 0 ? "text-retain" : "text-risk"}`}>
+                <tr key={pct} style={selected ? { backgroundColor: "#eef3fd" } : undefined}>
+                  <td className="tabular font-medium">
+                    {formatPercent(pct / 100, 0)}
+                    {selected ? <span className="ml-2 text-xs font-normal text-accent">selected</span> : null}
+                  </td>
+                  <td className="tabular num">{formatCurrency(retainedValue)}</td>
+                  <td className="tabular num">{formatCurrency(campaignCost)}</td>
+                  <td className={`tabular num font-medium ${netValue >= 0 ? "text-healthy" : "text-critical"}`}>
                     {formatCurrency(netValue)}
                   </td>
                 </tr>
@@ -131,17 +140,7 @@ export default function RetentionSimulator({ segments }: { segments: SegmentSumm
             })}
           </tbody>
         </table>
-      </section>
-    </div>
-  );
-}
-
-function Stat({ label, value, tone }: { label: string; value: string; tone?: "value" | "risk" }) {
-  const toneClass = tone === "value" ? "text-value" : tone === "risk" ? "text-risk" : "text-ink";
-  return (
-    <div className="border-b-2 border-line pb-3">
-      <div className={`tabular text-2xl font-medium ${toneClass}`}>{value}</div>
-      <div className="mt-1 text-sm text-ink-soft">{label}</div>
+      </Panel>
     </div>
   );
 }

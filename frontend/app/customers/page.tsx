@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { listCustomers } from "@/lib/api";
 import { formatCurrency } from "@/lib/format";
+import { SEGMENT_COLOR } from "@/lib/segments";
+import PageHeader from "@/components/PageHeader";
+import Panel from "@/components/Panel";
 import RiskBadge from "@/components/RiskBadge";
 
 const PAGE_SIZE = 25;
@@ -27,113 +30,132 @@ export default async function CustomersPage({
   });
 
   const totalPages = Math.max(Math.ceil(result.total / PAGE_SIZE), 1);
+  const firstRow = result.total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const lastRow = Math.min(page * PAGE_SIZE, result.total);
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <h1 className="text-2xl font-medium">Customers</h1>
-        <p className="mt-1 text-sm text-ink-soft">{result.total.toLocaleString()} total</p>
-      </div>
+      <PageHeader
+        title="Customers"
+        description={`${result.total.toLocaleString("en-IN")} customers. Sorted by ${
+          sortBy === "predicted_clv" ? "predicted lifetime value" : "churn risk"
+        }, highest first.`}
+      />
 
-      <form className="flex flex-wrap items-end gap-4 border-b border-line pb-6" action="/customers">
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-ink-soft">Search customer ID</span>
-          <input
-            type="text"
-            name="search"
-            defaultValue={search}
-            placeholder="C000123"
-            className="rounded border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-ink-soft">Segment</span>
-          <select
-            name="segment"
-            defaultValue={segment ?? ""}
-            className="rounded border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent"
-          >
-            <option value="">All</option>
-            <option value="Champions">Champions</option>
-            <option value="Steady Regulars">Steady Regulars</option>
-            <option value="New / Developing">New / Developing</option>
-            <option value="Dormant / Lost">Dormant / Lost</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-ink-soft">Plan</span>
-          <select
-            name="plan"
-            defaultValue={plan ?? ""}
-            className="rounded border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent"
-          >
-            <option value="">All</option>
-            <option value="bronze">Bronze</option>
-            <option value="silver">Silver</option>
-            <option value="gold">Gold</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-ink-soft">Sort by</span>
-          <select
-            name="sort_by"
-            defaultValue={sortBy}
-            className="rounded border border-line bg-surface px-3 py-1.5 text-sm outline-none focus:border-accent"
-          >
-            <option value="churn_probability">Churn risk</option>
-            <option value="predicted_clv">Predicted CLV</option>
-          </select>
-        </label>
-        <button type="submit" className="rounded bg-accent px-4 py-1.5 text-sm text-white">
-          Apply
-        </button>
-      </form>
+      <Panel>
+        <form className="flex flex-wrap items-end gap-4" action="/customers">
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium text-ink-soft">
+            Customer ID
+            <input type="text" name="search" defaultValue={search} placeholder="C000123" className="field w-44" />
+          </label>
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium text-ink-soft">
+            Segment
+            <select name="segment" defaultValue={segment ?? ""} className="field w-44">
+              <option value="">All segments</option>
+              <option value="Champions">Champions</option>
+              <option value="Steady Regulars">Steady Regulars</option>
+              <option value="New / Developing">New / Developing</option>
+              <option value="Dormant / Lost">Dormant / Lost</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium text-ink-soft">
+            Plan
+            <select name="plan" defaultValue={plan ?? ""} className="field w-36">
+              <option value="">All plans</option>
+              <option value="bronze">Bronze</option>
+              <option value="silver">Silver</option>
+              <option value="gold">Gold</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-1.5 text-[13px] font-medium text-ink-soft">
+            Sort by
+            <select name="sort_by" defaultValue={sortBy} className="field w-40">
+              <option value="churn_probability">Churn risk</option>
+              <option value="predicted_clv">Predicted CLV</option>
+            </select>
+          </label>
+          <button type="submit" className="btn-primary">
+            Apply filters
+          </button>
+          {search || segment || plan ? (
+            <Link href="/customers" className="pb-2 text-sm text-accent hover:underline">
+              Clear
+            </Link>
+          ) : null}
+        </form>
+      </Panel>
 
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-line text-left text-ink-soft">
-            <th className="py-2 font-medium">Customer</th>
-            <th className="py-2 font-medium">Plan</th>
-            <th className="py-2 font-medium">Channel</th>
-            <th className="py-2 font-medium">Segment</th>
-            <th className="py-2 font-medium">Churn risk</th>
-            <th className="py-2 text-right font-medium">Predicted CLV</th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.items.map((item) => (
-            <tr key={item.customer_id} className="border-b border-line/60 hover:bg-surface">
-              <td className="py-2">
-                <Link href={`/customers/${item.customer_id}`} className="text-accent hover:underline">
-                  {item.customer_id}
-                </Link>
-              </td>
-              <td className="py-2 capitalize">{item.plan}</td>
-              <td className="py-2 capitalize">{item.acquisition_channel.replace("_", " ")}</td>
-              <td className="py-2">{item.segment ?? "—"}</td>
-              <td className="py-2">
-                <RiskBadge probability={item.churn_probability} />
-              </td>
-              <td className="tabular py-2 text-right">
-                {item.predicted_clv !== null ? formatCurrency(item.predicted_clv) : "—"}
-              </td>
+      <Panel flush>
+        <table className="data-table">
+          <thead>
+            <tr>
+              <th>Customer</th>
+              <th>Plan</th>
+              <th>Channel</th>
+              <th>Segment</th>
+              <th>Churn risk</th>
+              <th className="num">Predicted CLV</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {result.items.length === 0 ? (
+              <tr>
+                <td colSpan={6} className="py-10 text-center text-ink-soft">
+                  No customers match these filters. Clear a filter or check the customer ID.
+                </td>
+              </tr>
+            ) : null}
+            {result.items.map((item) => (
+              <tr key={item.customer_id}>
+                <td>
+                  <Link href={`/customers/${item.customer_id}`} className="font-medium text-accent hover:underline">
+                    {item.customer_id}
+                  </Link>
+                </td>
+                <td className="capitalize">{item.plan}</td>
+                <td className="capitalize">{item.acquisition_channel.replaceAll("_", " ")}</td>
+                <td>
+                  {item.segment ? (
+                    <span className="inline-flex items-center gap-2">
+                      <span
+                        className="h-2 w-2 rounded-full"
+                        style={{ backgroundColor: SEGMENT_COLOR[item.segment] ?? "#667085" }}
+                        aria-hidden
+                      />
+                      {item.segment}
+                    </span>
+                  ) : (
+                    "—"
+                  )}
+                </td>
+                <td>
+                  <RiskBadge probability={item.churn_probability} />
+                </td>
+                <td className="tabular num">{item.predicted_clv !== null ? formatCurrency(item.predicted_clv) : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </Panel>
 
       <div className="flex items-center justify-between text-sm text-ink-soft">
-        <span>
-          Page {page} of {totalPages}
+        <span className="tabular">
+          {firstRow}–{lastRow} of {result.total.toLocaleString("en-IN")} · page {page} of {totalPages}
         </span>
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           {page > 1 ? (
-            <Link className="text-accent hover:underline" href={buildPageHref(params, page - 1)}>
+            <Link
+              className="rounded-lg border border-line-strong bg-surface px-3 py-1.5 font-medium text-ink hover:bg-paper"
+              href={buildPageHref(params, page - 1)}
+            >
               Previous
             </Link>
           ) : null}
           {page < totalPages ? (
-            <Link className="text-accent hover:underline" href={buildPageHref(params, page + 1)}>
+            <Link
+              className="rounded-lg border border-line-strong bg-surface px-3 py-1.5 font-medium text-ink hover:bg-paper"
+              href={buildPageHref(params, page + 1)}
+            >
               Next
             </Link>
           ) : null}

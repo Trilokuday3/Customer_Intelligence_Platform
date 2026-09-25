@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ApiError, getSegment } from "@/lib/api";
 import { formatCurrency, formatNumber, formatPercent } from "@/lib/format";
+import KpiStrip from "@/components/KpiStrip";
+import PageHeader from "@/components/PageHeader";
+import Panel from "@/components/Panel";
 import RiskBadge from "@/components/RiskBadge";
 
 export default async function SegmentDetailPage({ params }: { params: Promise<{ name: string }> }) {
@@ -13,48 +16,53 @@ export default async function SegmentDetailPage({ params }: { params: Promise<{ 
 
   return (
     <div className="flex flex-col gap-6">
-      <div>
-        <Link href="/segments" className="text-sm text-accent hover:underline">
-          ← All segments
-        </Link>
-        <h1 className="mt-2 text-2xl font-medium">{detail.summary.segment}</h1>
-        <p className="mt-1 text-sm text-ink-soft">
-          {formatNumber(detail.summary.size)} customers · mean churn {formatPercent(detail.summary.mean_churn_probability)}{" "}
-          · mean CLV {formatCurrency(detail.summary.mean_predicted_clv)}
-        </p>
+      <PageHeader
+        back={
+          <Link href="/segments" className="text-accent hover:underline">
+            ← All segments
+          </Link>
+        }
+        title={detail.summary.segment}
+      />
+
+      <div className="max-w-2xl">
+        <KpiStrip
+          items={[
+            { label: "Customers", value: formatNumber(detail.summary.size) },
+            { label: "Mean churn probability", value: formatPercent(detail.summary.mean_churn_probability), tone: "critical" },
+            { label: "Mean predicted CLV", value: formatCurrency(detail.summary.mean_predicted_clv), tone: "value" },
+          ]}
+        />
       </div>
 
-      <section>
-        <h2 className="text-sm font-medium text-ink-soft">Top at-risk in this segment</h2>
-        <table className="mt-3 w-full text-sm">
+      <Panel title="Most at risk in this segment" description="Highest churn probability first." flush>
+        <table className="data-table">
           <thead>
-            <tr className="border-b border-line text-left text-ink-soft">
-              <th className="py-2 font-medium">Customer</th>
-              <th className="py-2 font-medium">Plan</th>
-              <th className="py-2 font-medium">Churn risk</th>
-              <th className="py-2 text-right font-medium">Predicted CLV</th>
+            <tr>
+              <th>Customer</th>
+              <th>Plan</th>
+              <th>Churn risk</th>
+              <th className="num">Predicted CLV</th>
             </tr>
           </thead>
           <tbody>
             {detail.top_at_risk.map((item) => (
-              <tr key={item.customer_id} className="border-b border-line/60 hover:bg-surface">
-                <td className="py-2">
-                  <Link href={`/customers/${item.customer_id}`} className="text-accent hover:underline">
+              <tr key={item.customer_id}>
+                <td>
+                  <Link href={`/customers/${item.customer_id}`} className="font-medium text-accent hover:underline">
                     {item.customer_id}
                   </Link>
                 </td>
-                <td className="py-2 capitalize">{item.plan}</td>
-                <td className="py-2">
+                <td className="capitalize">{item.plan}</td>
+                <td>
                   <RiskBadge probability={item.churn_probability} />
                 </td>
-                <td className="tabular py-2 text-right">
-                  {item.predicted_clv !== null ? formatCurrency(item.predicted_clv) : "—"}
-                </td>
+                <td className="tabular num">{item.predicted_clv !== null ? formatCurrency(item.predicted_clv) : "—"}</td>
               </tr>
             ))}
           </tbody>
         </table>
-      </section>
+      </Panel>
     </div>
   );
 }
