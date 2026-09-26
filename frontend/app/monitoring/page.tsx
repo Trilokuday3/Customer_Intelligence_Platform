@@ -92,8 +92,8 @@ function DriftSection({ title, report }: { title: string; report: DriftReportRes
           <thead>
             <tr>
               <th>Feature</th>
-              <th className="num">Reference mean</th>
-              <th className="num">Current mean</th>
+              <th className="num hidden md:table-cell">Reference mean</th>
+              <th className="num hidden md:table-cell">Current mean</th>
               <th className="num">PSI</th>
               <th className="num">Status</th>
             </tr>
@@ -102,8 +102,8 @@ function DriftSection({ title, report }: { title: string; report: DriftReportRes
             {report.feature_drift.map((row) => (
               <tr key={row.metric_name}>
                 <td className="font-medium">{row.metric_name}</td>
-                <td className="tabular num">{row.reference_mean.toFixed(2)}</td>
-                <td className="tabular num">{row.current_mean.toFixed(2)}</td>
+                <td className="tabular num hidden md:table-cell">{row.reference_mean.toFixed(2)}</td>
+                <td className="tabular num hidden md:table-cell">{row.current_mean.toFixed(2)}</td>
                 <td className="tabular num">{row.psi.toFixed(3)}</td>
                 <td className="num">
                   <SeverityPill severity={row.severity} />

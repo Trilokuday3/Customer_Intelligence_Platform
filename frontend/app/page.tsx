@@ -4,8 +4,9 @@ import KpiStrip from "@/components/KpiStrip";
 import Panel from "@/components/Panel";
 import PageHeader, { AsOfChip } from "@/components/PageHeader";
 import RiskRibbon from "@/components/RiskRibbon";
-import SegmentBarChart from "@/components/charts/SegmentBarChart";
-import ChurnByDimensionChart from "@/components/charts/ChurnByDimensionChart";
+import BarList from "@/components/BarList";
+import { riskBand } from "@/lib/risk";
+import { SEGMENT_COLOR } from "@/lib/segments";
 
 export default async function DashboardPage() {
   const [summary, churnByChannel, distribution] = await Promise.all([
@@ -15,7 +16,9 @@ export default async function DashboardPage() {
     getRiskDistribution().catch(() => null),
   ]);
 
-  const segmentData = Object.entries(summary.segment_distribution).map(([segment, count]) => ({ segment, count }));
+  const segmentRows = Object.entries(summary.segment_distribution).sort((a, b) => b[1] - a[1]);
+  const largestSegment = Math.max(...segmentRows.map(([, count]) => count), 1);
+  const channelRows = [...churnByChannel].sort((a, b) => b.mean_churn_probability - a.mean_churn_probability);
   const highRiskShare = summary.scored_customers ? summary.high_risk_count / summary.scored_customers : 0;
 
   return (
@@ -61,14 +64,26 @@ export default async function DashboardPage() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-2">
         <Panel title="Customers by segment" description="Behavioural clusters, named from how each group buys.">
-          <div className="overflow-x-auto">
-            <SegmentBarChart data={segmentData} />
-          </div>
+          <BarList
+            label="Customers by segment"
+            items={segmentRows.map(([segment, count]) => ({
+              label: segment,
+              fraction: count / largestSegment,
+              display: formatNumber(count),
+              color: SEGMENT_COLOR[segment] ?? "#2b5fd9",
+            }))}
+          />
         </Panel>
         <Panel title="Churn rate by acquisition channel" description="Mean predicted churn probability per channel.">
-          <div className="overflow-x-auto">
-            <ChurnByDimensionChart data={churnByChannel} />
-          </div>
+          <BarList
+            label="Churn rate by acquisition channel"
+            items={channelRows.map((row) => ({
+              label: row.value.replaceAll("_", " "),
+              fraction: row.mean_churn_probability,
+              display: formatPercent(row.mean_churn_probability, 0),
+              color: riskBand(row.mean_churn_probability).color,
+            }))}
+          />
         </Panel>
       </div>
     </div>

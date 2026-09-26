@@ -98,6 +98,18 @@ body {
   text-align: right;
 }
 
+/* Phones: tighter cells, and let long feature names wrap instead of widening the table. */
+@media (max-width: 640px) {
+  .data-table thead th,
+  .data-table tbody td {
+    padding-left: 0.75rem;
+    padding-right: 0.75rem;
+  }
+  .data-table tbody td:first-child {
+    overflow-wrap: anywhere;
+  }
+}
+
 /* Form controls */
 .field {
   border: 1px solid var(--line-strong);

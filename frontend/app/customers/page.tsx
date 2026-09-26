@@ -90,9 +90,9 @@ export default async function CustomersPage({
           <thead>
             <tr>
               <th>Customer</th>
-              <th>Plan</th>
-              <th>Channel</th>
-              <th>Segment</th>
+              <th className="hidden md:table-cell">Plan</th>
+              <th className="hidden md:table-cell">Channel</th>
+              <th className="hidden md:table-cell">Segment</th>
               <th>Churn risk</th>
               <th className="num">Predicted CLV</th>
             </tr>
@@ -111,10 +111,14 @@ export default async function CustomersPage({
                   <Link href={`/customers/${item.customer_id}`} className="font-medium text-accent hover:underline">
                     {item.customer_id}
                   </Link>
+                  <div className="mt-0.5 text-xs capitalize text-ink-soft md:hidden">
+                    {item.plan}
+                    {item.segment ? ` · ${item.segment}` : ""}
+                  </div>
                 </td>
-                <td className="capitalize">{item.plan}</td>
-                <td className="capitalize">{item.acquisition_channel.replaceAll("_", " ")}</td>
-                <td>
+                <td className="hidden capitalize md:table-cell">{item.plan}</td>
+                <td className="hidden capitalize md:table-cell">{item.acquisition_channel.replaceAll("_", " ")}</td>
+                <td className="hidden md:table-cell">
                   {item.segment ? (
                     <span className="inline-flex items-center gap-2">
                       <span

@@ -42,7 +42,7 @@ export default async function CohortsPage() {
             <tbody>
               {months.map((month) => (
                 <tr key={month}>
-                  <td className="tabular sticky left-0 bg-surface pr-3 text-[13px] text-ink-soft">{month}</td>
+                  <td className="tabular sticky left-0 bg-surface pr-3 whitespace-nowrap text-[13px] text-ink-soft">{month}</td>
                   {ages.map((age) => {
                     const value = byKey.get(`${month}:${age}`);
                     return (

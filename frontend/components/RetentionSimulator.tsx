@@ -112,7 +112,7 @@ export default function RetentionSimulator({ segments }: { segments: SegmentSumm
             <tr>
               <th>Assumed save rate</th>
               <th className="num">Retained value</th>
-              <th className="num">Campaign cost</th>
+              <th className="num hidden sm:table-cell">Campaign cost</th>
               <th className="num">Net value</th>
             </tr>
           </thead>
@@ -131,7 +131,7 @@ export default function RetentionSimulator({ segments }: { segments: SegmentSumm
                     {selected ? <span className="ml-2 text-xs font-normal text-accent">selected</span> : null}
                   </td>
                   <td className="tabular num">{formatCurrency(retainedValue)}</td>
-                  <td className="tabular num">{formatCurrency(campaignCost)}</td>
+                  <td className="tabular num hidden sm:table-cell">{formatCurrency(campaignCost)}</td>
                   <td className={`tabular num font-medium ${netValue >= 0 ? "text-healthy" : "text-critical"}`}>
                     {formatCurrency(netValue)}
                   </td>
