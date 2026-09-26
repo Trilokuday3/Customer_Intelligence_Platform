@@ -143,7 +143,13 @@ def main(as_of: str | None = None) -> None:
             print("seeded raw tables from data/raw/*.parquet")
         else:
             print("raw tables already seeded -- keeping existing (and any streamed) rows")
+        # Hosted Postgres (Neon) closes connections that sit idle in a
+        # transaction, and reading ~1M rows and training both take minutes.
+        # End the transaction after each long phase so the next query checks
+        # out a fresh, health-checked connection instead of a dead one.
+        db.commit()
         tables = read_raw_tables(db)
+        db.commit()
         customers, products = tables["customers"], tables["products"]
         orders, interactions, support = tables["orders"], tables["interactions"], tables["support"]
         score_as_of = resolve_score_as_of(as_of, orders, interactions, support)
@@ -163,6 +169,7 @@ def main(as_of: str | None = None) -> None:
         previous_predictions = db.query(Prediction).all()
         previous_churn_proba = [p.churn_probability for p in previous_predictions]
         previous_clv_pred = [p.predicted_clv for p in previous_predictions]
+        db.commit()
 
         print("training churn model...")
         churn_cutoffs = [pd.Timestamp(d) for d in CHURN_TRAIN_CUTOFFS]
