@@ -12,7 +12,17 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 load_dotenv()
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./cip.db")
+def normalize_database_url(url: str) -> str:
+    """Name the psycopg2 driver explicitly. Hosts hand out plain
+    `postgres://` / `postgresql://` URLs, and SQLAlchemy 2.1 reads those as
+    the newer psycopg 3 driver, which this project does not install."""
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg2://" + url[len(prefix) :]
+    return url
+
+
+DATABASE_URL = normalize_database_url(os.environ.get("DATABASE_URL", "sqlite:///./cip.db"))
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 # pool_pre_ping: hosted Postgres (Neon) drops idle connections; replace them
